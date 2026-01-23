@@ -24,7 +24,7 @@ function updateResourceStatus(element, status, message) {
     element.className = `resource-item ${status}`;
     const icon = element.querySelector('.icon');
     const statusText = element.querySelector('.status');
-
+    
     switch (status) {
         case 'loading':
             icon.textContent = '⏳';
@@ -61,14 +61,19 @@ function formatBytes(bytes) {
     return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
 }
 
+// Convert relative path to absolute (remove leading ./)
+function toAbsolutePath(path) {
+    return path.replace(/^\.\//, '/');
+}
+
 // Fetch with error handling
 async function fetchResource(url, type = 'arrayBuffer') {
     const response = await fetch(url);
     if (!response.ok) {
         throw new Error(`Failed to fetch ${url}: ${response.status}`);
     }
-    return type === 'json' ? response.json() :
-           type === 'text' ? response.text() :
+    return type === 'json' ? response.json() : 
+           type === 'text' ? response.text() : 
            response.arrayBuffer();
 }
 
@@ -85,37 +90,63 @@ async function initialize() {
         els.formName.textContent = config.name;
         console.log('Config loaded:', config);
 
-        // 3. Load template JSON
+        // 3. Load and parse template JSON
         updateResourceStatus(els.resTemplate, 'loading', 'Fetching...');
-        const templateJson = await fetchResource(config.resources.template, 'text');
+        const templateJson = await fetchResource(config.template, 'text');
+        const templateData = JSON.parse(templateJson);
         template = PdfTemplate.fromJson(templateJson);
         updateResourceStatus(els.resTemplate, 'success', 'Loaded');
-        console.log('Template loaded');
+        console.log('Template loaded:', templateData);
 
-        // 4. Load base PDF
+        // 4. Load base PDF from path in template
         updateResourceStatus(els.resPdf, 'loading', 'Fetching...');
-        const pdfBytes = await fetchResource(config.resources.pdf);
+        const pdfPath = toAbsolutePath(templateData.template.source);
+        const pdfBytes = await fetchResource(pdfPath);
         template.loadBasePdf(new Uint8Array(pdfBytes));
         template.setWordcut(wordcut);
         updateResourceStatus(els.resPdf, 'success', formatBytes(pdfBytes.byteLength));
-        console.log('PDF loaded');
+        console.log('PDF loaded from:', pdfPath);
 
-        // 5. Load fonts
-        updateResourceStatus(els.resFonts, 'loading', `0/${config.resources.fonts.length}`);
+        // 5. Load fonts from paths in template
+        const fonts = templateData.fonts || [];
+        const fontStyles = ['regular', 'bold', 'italic', 'boldItalic'];
+        let totalFonts = 0;
         let loadedFonts = 0;
-        for (const font of config.resources.fonts) {
-            const fontBytes = await fetchResource(font.url);
-            // Use font id + style as the font name for loading
-            const fontKey = font.style === 'regular' ? font.id : `${font.id}-${font.style}`;
-            template.loadFont(fontKey, new Uint8Array(fontBytes));
-            loadedFonts++;
-            updateResourceStatus(els.resFonts, 'loading', `${loadedFonts}/${config.resources.fonts.length}`);
-            console.log(`Font loaded: ${fontKey}`);
+
+        // Count total fonts
+        for (const font of fonts) {
+            for (const style of fontStyles) {
+                if (font[style]) totalFonts++;
+            }
+        }
+
+        updateResourceStatus(els.resFonts, 'loading', `0/${totalFonts}`);
+
+        // Load each font
+        for (const font of fonts) {
+            for (const style of fontStyles) {
+                if (font[style]) {
+                    const fontPath = toAbsolutePath(font[style]);
+                    const fontBytes = await fetchResource(fontPath);
+                    
+                    // Build font key: "sarabun", "sarabun-bold", "sarabun-italic", "sarabun-bold-italic"
+                    const fontKey = style === 'regular' ? font.id : `${font.id}-${style.replace('Italic', '-italic').replace('bold', 'bold')}`;
+                    const normalizedKey = style === 'regular' ? font.id :
+                                          style === 'bold' ? `${font.id}-bold` :
+                                          style === 'italic' ? `${font.id}-italic` :
+                                          `${font.id}-bold-italic`;
+                    
+                    template.loadFont(normalizedKey, new Uint8Array(fontBytes));
+                    loadedFonts++;
+                    updateResourceStatus(els.resFonts, 'loading', `${loadedFonts}/${totalFonts}`);
+                    console.log(`Font loaded: ${normalizedKey} from ${fontPath}`);
+                }
+            }
         }
         updateResourceStatus(els.resFonts, 'success', `${loadedFonts} fonts`);
 
         // 6. Load sample data
-        sampleData = await fetchResource(config.resources.sampleData, 'text');
+        sampleData = await fetchResource(config.sampleData, 'text');
         els.dataJson.value = sampleData;
         console.log('Sample data loaded');
 
