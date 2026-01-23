@@ -14,6 +14,124 @@ A cross-platform PDF template filling library in Rust, with WebAssembly support.
 - **Embedded Thai dictionary** - no external files needed
 - Compiles to native binary and WebAssembly
 
+## AI Should Read This Part
+
+This section provides essential context for AI agents working with this codebase.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         rspdft                               │
+├─────────────────────────────────────────────────────────────┤
+│  crates/pdf-core/    - Low-level PDF manipulation           │
+│    • PdfDocument: Open, modify, save PDFs                   │
+│    • FontData: TrueType font embedding with subsetting      │
+│    • Image handling (JPEG, PNG)                             │
+├─────────────────────────────────────────────────────────────┤
+│  crates/thai-text/   - Thai language processing             │
+│    • ThaiWordcut: Word segmentation (embedded dictionary)   │
+│    • Thai number/currency/date formatting                   │
+├─────────────────────────────────────────────────────────────┤
+│  crates/template/    - Template parsing and rendering       │
+│    • TemplateRenderer: Load once, render many times         │
+│    • Block types: text, fieldform, table, qrcode            │
+│    • Data binding with JSONPath syntax                      │
+├─────────────────────────────────────────────────────────────┤
+│  crates/wasm/        - WebAssembly bindings                 │
+│    • PdfTemplate: JS-friendly API wrapper                   │
+│    • ThaiWordcut, ThaiFormatter exports                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Template JSON Structure
+
+```json
+{
+  "pdf": "path/to/base.pdf",
+  "fonts": [
+    { "id": "sarabun", "path": "fonts/THSarabunNew.ttf" },
+    { "id": "sarabun-bold", "path": "fonts/THSarabunNew-Bold.ttf" }
+  ],
+  "blocks": [
+    {
+      "type": "text",
+      "x": 100,
+      "y": 200,
+      "page": 1,
+      "font": "sarabun",
+      "fontSize": 14,
+      "binding": "$.customer.name"
+    },
+    {
+      "type": "fieldform",
+      "x": 50,
+      "y": 300,
+      "page": 1,
+      "font": "sarabun",
+      "fontSize": 12,
+      "binding": "$.taxId",
+      "spacing": 15,
+      "maxLength": 13
+    },
+    {
+      "type": "qrcode",
+      "x": 400,
+      "y": 100,
+      "page": 1,
+      "size": 80,
+      "binding": "$.qrData"
+    }
+  ]
+}
+```
+
+### Key API Patterns
+
+**Rust (Native)**:
+```rust
+// TemplateRenderer: load once, render many
+let mut renderer = TemplateRenderer::new(&json, pdf_bytes, Some(Path::new(".")))?;
+renderer.set_wordcut(ThaiWordcut::embedded()?);
+let output = renderer.render(&data)?;  // Each call is independent
+```
+
+**JavaScript (WASM)**:
+```javascript
+// PdfTemplate: fluent API
+const template = PdfTemplate.fromJson(json);
+template.loadBasePdf(pdfBytes);
+template.loadFont('sarabun', fontBytes);
+template.setWordcut(ThaiWordcut.embedded());
+const output = template.render(data);  // Each call is independent
+```
+
+### Data Binding
+
+- `$.field` - Root level field
+- `$.object.property` - Nested property
+- `$.array[0]` - Array index
+- `$.items[*].name` - Array iteration (in tables)
+
+### Font Handling
+
+Fonts are embedded as subsets (only used glyphs) to minimize PDF size.
+Font IDs in template JSON must match the `id` used in `loadFont()` or auto-loaded from paths.
+
+### Error Handling
+
+All operations return `Result<T, E>`:
+- Rust: Use `?` operator or `.expect()`
+- JavaScript: Methods throw on error, wrap in try/catch
+
+### Testing
+
+```bash
+cargo test --all        # Run all tests
+cargo run --example boj45  # Run example
+./scripts/build-wasm.sh    # Build WASM
+```
+
 ## Installation
 
 ### Rust
@@ -104,26 +222,29 @@ async function generatePdf() {
 ### Node.js
 
 ```javascript
-const fs = require('fs');
-const { PdfTemplate, ThaiWordcut } = require('@rspdft/wasm');
+import { readFileSync, writeFileSync } from 'fs';
+import { PdfTemplate, ThaiWordcut } from '@rspdft/wasm';
 
 async function main() {
     // Use embedded dictionary
     const wordcut = ThaiWordcut.embedded();
     
-    const templateJson = fs.readFileSync('template.json', 'utf-8');
+    const templateJson = readFileSync('template.json', 'utf-8');
     const template = PdfTemplate.fromJson(templateJson);
     
-    const pdfBytes = fs.readFileSync('base-template.pdf');
+    const pdfBytes = readFileSync('base-template.pdf');
     template.loadBasePdf(new Uint8Array(pdfBytes));
     
-    const fontBytes = fs.readFileSync('fonts/THSarabunNew.ttf');
+    const fontBytes = readFileSync('fonts/THSarabunNew.ttf');
     template.loadFont('sarabun', new Uint8Array(fontBytes));
+    
+    // Set wordcut for Thai text wrapping
+    template.setWordcut(wordcut);
     
     const data = { customer: { name: "Test" }, amount: 100 };
     const output = template.render(data);
     
-    fs.writeFileSync('output.pdf', Buffer.from(output));
+    writeFileSync('output.pdf', Buffer.from(output));
 }
 
 main();
