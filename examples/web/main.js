@@ -88,7 +88,7 @@ async function initialize() {
         // 3. Load template JSON
         updateResourceStatus(els.resTemplate, 'loading', 'Fetching...');
         const templateJson = await fetchResource(config.resources.template, 'text');
-        template = PdfTemplate.from_json(templateJson);
+        template = PdfTemplate.fromJson(templateJson);
         updateResourceStatus(els.resTemplate, 'success', 'Loaded');
         console.log('Template loaded');
 
