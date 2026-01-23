@@ -89,7 +89,7 @@ async function generatePdf() {
         customer: { name: "บริษัท ตัวอย่าง จำกัด" },
         amount: 40000.50
     };
-    const outputPdf = template.render(data, wordcut);
+    const outputPdf = template.render(data);
     
     // Download
     const blob = new Blob([outputPdf], { type: 'application/pdf' });
@@ -121,13 +121,59 @@ async function main() {
     template.loadFont('sarabun', new Uint8Array(fontBytes));
     
     const data = { customer: { name: "Test" }, amount: 100 };
-    const output = template.render(data, wordcut);
+    const output = template.render(data);
     
     fs.writeFileSync('output.pdf', Buffer.from(output));
 }
 
 main();
 ```
+
+## Batch Rendering (Rust)
+
+The `TemplateRenderer` supports efficient batch rendering - load resources once, render many times:
+
+```rust
+use template::TemplateRenderer;
+use serde_json::json;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 1. Load once (fonts auto-loaded from template paths)
+    let template_json = std::fs::read_to_string("template.json")?;
+    let pdf_bytes = std::fs::read("base.pdf")?;
+    let mut renderer = TemplateRenderer::new(&template_json, pdf_bytes, Some(std::path::Path::new(".")))?;
+
+    // Optional: enable Thai word segmentation
+    renderer.set_wordcut(thai_text::ThaiWordcut::embedded()?);
+
+    // 2. Render multiple times (each independent, no data mixing)
+    let records = vec![
+        json!({"name": "Alice", "amount": 1000.00}),
+        json!({"name": "Bob", "amount": 2000.00}),
+        json!({"name": "Charlie", "amount": 3000.00}),
+    ];
+
+    for (i, data) in records.iter().enumerate() {
+        let pdf = renderer.render(data)?;
+        std::fs::write(format!("output_{}.pdf", i + 1), pdf)?;
+    }
+
+    Ok(())
+}
+```
+
+For manual font loading (e.g., when fonts are not in template paths):
+
+```rust
+let mut renderer = TemplateRenderer::new(&template_json, pdf_bytes, None)?;
+renderer.add_font("sarabun", std::fs::read("fonts/THSarabunNew.ttf")?);
+```
+
+## Examples
+
+- **Browser**: See `examples/web/` for interactive browser demo
+- **Node.js**: See `examples/node/` for CLI batch processing
+- **Rust**: See `examples/boj45.rs` for native Rust usage
 
 ## Building
 
@@ -137,12 +183,20 @@ main();
 cargo build --release
 ```
 
-### WASM
+### WASM (using build script)
+
+```bash
+./scripts/build-wasm.sh
+```
+
+This builds both web and Node.js targets and sets up example symlinks.
+
+### WASM (manual)
 
 ```bash
 cd crates/wasm
-wasm-pack build --target web      # For browsers
-wasm-pack build --target nodejs   # For Node.js
+wasm-pack build --target web      # For browsers (ES modules)
+wasm-pack build --target nodejs   # For Node.js (CommonJS)
 ```
 
 ## Project Structure

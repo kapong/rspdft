@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>rspdft Browser Demo</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📄 rspdft Browser Demo</h1>
+            <p class="subtitle">PDF Template Filling with Thai Language Support</p>
+        </header>
+
+        <!-- Section 1: File Upload -->
+        <section class="section">
+            <h2>1. Load Resources</h2>
+
+            <div class="upload-group">
+                <label for="templateJson">Template JSON</label>
+                <input type="file" id="templateJson" accept=".json" />
+                <button id="loadSampleTemplate" class="btn-secondary">Load Sample Template</button>
+            </div>
+
+            <div class="upload-group">
+                <label for="basePdf">Base PDF</label>
+                <input type="file" id="basePdf" accept=".pdf" />
+                <span class="hint">Required: A blank PDF template</span>
+            </div>
+
+            <div class="upload-group">
+                <label for="fontFile">Font File</label>
+                <input type="file" id="fontFile" accept=".ttf,.otf" />
+                <input type="text" id="fontName" placeholder="Font name (e.g., sarabun)" />
+                <button id="addFont" class="btn-secondary">Add Font</button>
+            </div>
+
+            <div class="fonts-list">
+                <h3>Loaded Fonts</h3>
+                <ul id="fontsList">
+                    <li class="empty">No fonts loaded</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- Section 2: Data Input -->
+        <section class="section">
+            <h2>2. Data Input</h2>
+            <div class="data-input">
+                <label for="dataJson">JSON Data</label>
+                <textarea id="dataJson" rows="10" placeholder="Enter JSON data..."></textarea>
+                <button id="loadSampleData" class="btn-secondary">Load Sample Data</button>
+            </div>
+        </section>
+
+        <!-- Section 3: Actions -->
+        <section class="section">
+            <h2>3. Actions</h2>
+            <div class="actions">
+                <button id="renderPdf" class="btn-primary" disabled>Render PDF</button>
+                <button id="renderBatch" class="btn-secondary" disabled>Render Batch (3 variations)</button>
+            </div>
+        </section>
+
+        <!-- Section 4: Status -->
+        <section class="section">
+            <h2>4. Status</h2>
+            <div id="status" class="status">
+                <div class="status-item info">Initializing WASM...</div>
+            </div>
+            <div id="error" class="error hidden"></div>
+        </section>
+
+        <!-- Download Links -->
+        <section class="section">
+            <h2>5. Downloads</h2>
+            <div id="downloads" class="downloads">
+                <p class="empty">No PDFs generated yet</p>
+            </div>
+        </section>
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>

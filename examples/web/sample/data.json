@@ -1,0 +1,8 @@
+{
+  "customer": {
+    "name": "บริษัท ทดสอบ จำกัด"
+  },
+  "amount": 12500.50,
+  "date": "2025-01-23",
+  "qr_data": "https://rspdft.dev/invoice/12345"
+}

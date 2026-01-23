@@ -1,158 +1,213 @@
 # 001: Batch Processing & WASM Examples
 
 **Branch**: `feature/001-batch-wasm`
-**Status**: planning
+**Status**: completed
 
 ## Objective
 
-Improve the PDF template filling library with batch processing capabilities for rendering multiple PDFs efficiently, then expose this functionality via WebAssembly bindings with comprehensive examples for both browser and Node.js environments.
+Refactor `TemplateRenderer` to support a load-modify-render workflow. Resources are loaded once, can be modified, then `render()` can be called multiple times - each call clones the base state and applies fresh data with no mixing between calls.
 
 ### Goals
-1. **Batch Processing**: Render multiple documents from a single template+font setup without reloading resources
-2. **WASM Integration**: Expose batch processing API to JavaScript
-3. **Examples**: Provide working examples for browser and Node.js usage
+1. **Load Once**: Template, PDF, and fonts loaded once
+2. **Modify**: Allow template/document modifications after loading  
+3. **Render Multiple Times**: Each `render(data)` clones base state, applies data, returns bytes
+4. **No Data Mixing**: Previous render data never affects next render
+5. **WASM Support**: Expose full workflow to JavaScript
 
 ## Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Template Crate                          │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ BatchRenderer                                        │   │
-│  │  - Holds template, fonts, wordcut                    │   │
-│  │  - render_batch(data: Vec<Value>) -> Vec<Vec<u8>>   │   │
-│  │  - render_single(data: &Value) -> Vec<u8>           │   │
-│  └─────────────────────────────────────────────────────┘   │
+│                     TemplateRenderer                         │
+├─────────────────────────────────────────────────────────────┤
+│  LOAD PHASE (once)                                           │
+│    new(template_json, pdf_bytes) -> TemplateRenderer         │
+│    add_font(name, bytes)                                     │
+│    set_wordcut(wordcut)                                      │
+├─────────────────────────────────────────────────────────────┤
+│  MODIFY PHASE (optional, anytime before render)              │
+│    template_mut() -> &mut Template                           │
+├─────────────────────────────────────────────────────────────┤
+│  RENDER PHASE (call multiple times, each independent)        │
+│    render(data) -> Vec<u8>                                   │
+│      └─> clones PDF, applies data, returns bytes             │
+│    render(data) -> Vec<u8>   // fresh clone, no mixing       │
+│    render(data) -> Vec<u8>   // fresh clone, no mixing       │
 └─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      WASM Crate                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ PdfBatchRenderer (wasm_bindgen)                      │   │
-│  │  - new(template_json, pdf_bytes, fonts)             │   │
-│  │  - renderBatch(data_array) -> Uint8Array[]          │   │
-│  │  - renderSingle(data) -> Uint8Array                 │   │
-│  └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┴───────────────┐
-              ▼                               ▼
-┌─────────────────────────┐     ┌─────────────────────────┐
-│   Browser Example       │     │   Node.js Example       │
-│   - index.html          │     │   - render.mjs          │
-│   - Web Workers support │     │   - CLI batch processing│
-└─────────────────────────┘     └─────────────────────────┘
 ```
+
+## Design
+
+### Key Principle: Clone on Render
+
+```rust
+// Each render() call:
+pub fn render(&self, data: &Value) -> Result<Vec<u8>> {
+    // 1. Clone base PDF bytes -> new PdfDocument
+    let mut doc = PdfDocument::open_from_bytes(&self.pdf_bytes)?;
+    
+    // 2. Add fonts to this fresh document
+    for (name, font_data) in &self.fonts {
+        doc.add_font(name, font_data)?;
+    }
+    
+    // 3. Render template with data
+    // ... apply blocks to doc ...
+    
+    // 4. Return bytes (doc is dropped, no state retained)
+    doc.to_bytes()
+}
+```
+
+Each call is completely independent - no state from previous renders.
 
 ## Steps
 
-### 1. Add Batch Renderer to Template Crate
+### 1a. Refactor TemplateRenderer
 
-- [ ] Create `BatchRenderer` struct that holds template, fonts, and optional wordcut
-- [ ] Implement `render_single(&self, data: &Value) -> Result<Vec<u8>>`
-- [ ] Implement `render_batch(&self, data: Vec<Value>) -> Result<Vec<Vec<u8>>>`
-- [ ] Support for loading fonts from bytes (not just file paths) for WASM compatibility
-- [ ] Add builder pattern for configuration
+- [x] Change `TemplateRenderer` to own `Template` (not reference)
+- [x] Add `pdf_bytes: Vec<u8>` field
+- [x] Add `fonts: HashMap<String, Vec<u8>>` field
+- [x] Add `wordcut: Option<ThaiWordcut>` field (owned)
+- [x] Create `new(template_json: &str, pdf_bytes: Vec<u8>) -> Result<Self>`
+- [x] Add `add_font(&mut self, name: &str, data: Vec<u8>)`
+- [x] Add `set_wordcut(&mut self, wordcut: ThaiWordcut)`
+- [x] Add `template(&self) -> &Template`
+- [x] Add `template_mut(&mut self) -> &mut Template`
+- [x] Implement `render(&self, data: &Value) -> Result<Vec<u8>>` (clones, applies, returns)
+- [x] Remove old `render(&self, doc: &mut PdfDocument, data)` method
 
-> Commit: `feat(template): add BatchRenderer for efficient multi-document rendering`
+> Commit: `feat(template): refactor TemplateRenderer for reusable rendering`
 
-### 2. Add WASM Batch Rendering API
+### 1b. Update Existing Examples
 
-- [ ] Create `PdfBatchRenderer` struct with wasm_bindgen
-- [ ] Implement `new(template_json, pdf_bytes)` constructor
-- [ ] Implement `loadFont(name, bytes)` method
-- [ ] Implement `setWordcut(wordcut: ThaiWordcut)` method
-- [ ] Implement `renderSingle(data) -> Uint8Array` method
-- [ ] Implement `renderBatch(data_array) -> Array<Uint8Array>` method
-- [ ] Add proper error handling and JS-friendly error messages
+- [x] Update `examples/full_demo.rs` to use new TemplateRenderer API
+- [x] Update `examples/boj45.rs` to use new TemplateRenderer API
+- [x] Update integration tests in `crates/template/tests/`
+- [x] Ensure `cargo test` passes
 
-> Commit: `feat(wasm): add PdfBatchRenderer for batch PDF generation`
+> Commit: `refactor(examples): update examples to use new TemplateRenderer API`
+
+### 2. Update WASM PdfTemplate
+
+- [x] Refactor `PdfTemplate` to use new `TemplateRenderer` internally
+- [x] Keep `fromJson()`, `loadBasePdf()`, `loadFont()` API
+- [x] Update `render(data, wordcut)` to use new renderer
+- [x] Each JS `render()` call is independent, no data mixing
+
+> Commit: `feat(wasm): update PdfTemplate to use refactored renderer`
 
 ### 3. Create Browser Example
 
-- [ ] Create `examples/web/` directory structure
-- [ ] Create `index.html` with file upload UI for template, PDF, fonts
-- [ ] Create `main.js` with WASM initialization and batch rendering
-- [ ] Add sample template JSON and demo data
-- [ ] Support downloading generated PDFs as ZIP
-- [ ] Add simple styling with CSS
+- [x] Create `examples/web/` directory structure
+- [x] Create `index.html` with UI for:
+  - Upload template JSON, base PDF, fonts
+  - Input data (JSON textarea or form)
+  - Render button -> download PDF
+  - Support rendering multiple times with different data
+- [x] Create `main.js` with WASM initialization
+- [x] Add sample template JSON and demo data
+- [x] Add simple styling with CSS
 
-> Commit: `feat(examples): add browser-based batch rendering demo`
+> Commit: `feat(examples): add browser-based rendering demo`
 
 ### 4. Create Node.js Example
 
-- [ ] Create `examples/node/` directory structure
-- [ ] Create `render.mjs` CLI script for batch processing
-- [ ] Create `package.json` with wasm-pack generated module dependency
-- [ ] Support reading template, PDF, fonts, and data from files
-- [ ] Output multiple PDFs to specified directory
-- [ ] Add usage documentation in README
+- [x] Create `examples/node/` directory structure
+- [x] Create `render.mjs` CLI script
+  - Load template, PDF, fonts once
+  - Read data from JSON file (array of records)
+  - Call render() for each record
+  - Save each PDF to output directory
+- [x] Create `package.json`
+- [x] Add README with usage instructions
 
-> Commit: `feat(examples): add Node.js batch rendering CLI example`
+> Commit: `feat(examples): add Node.js rendering CLI example`
 
 ### 5. Documentation & Build Scripts
 
-- [ ] Update main README with batch processing usage examples
-- [ ] Add WASM build instructions
-- [ ] Create build script for WASM package (`scripts/build-wasm.sh`)
-- [ ] Document API in rustdoc comments
+- [x] Update main README with new API usage
+- [x] Add WASM build instructions
+- [x] Create `scripts/build-wasm.sh`
+- [x] Document API in rustdoc comments
 
 > Commit: `docs: add batch processing and WASM documentation`
 
 ## API Design
 
-### Template Crate - BatchRenderer
+### Template Crate - TemplateRenderer
 
 ```rust
-/// Batch renderer for efficient multi-document PDF generation
-pub struct BatchRenderer<'a> {
+pub struct TemplateRenderer {
     template: Template,
     pdf_bytes: Vec<u8>,
     fonts: HashMap<String, Vec<u8>>,
-    wordcut: Option<&'a ThaiWordcut>,
+    wordcut: Option<ThaiWordcut>,
 }
 
-impl<'a> BatchRenderer<'a> {
-    /// Create a new batch renderer
-    pub fn new(template: Template, pdf_bytes: Vec<u8>) -> Self;
-
-    /// Add a font (from bytes, not file path)
-    pub fn add_font(self, name: &str, data: Vec<u8>) -> Self;
-
-    /// Set Thai wordcut for word wrapping
-    pub fn with_wordcut(self, wordcut: &'a ThaiWordcut) -> Self;
-
-    /// Render a single document
+impl TemplateRenderer {
+    /// Create from template JSON and base PDF
+    pub fn new(template_json: &str, pdf_bytes: Vec<u8>) -> Result<Self>;
+    
+    /// Add font from bytes
+    pub fn add_font(&mut self, name: &str, data: Vec<u8>);
+    
+    /// Set Thai wordcut
+    pub fn set_wordcut(&mut self, wordcut: ThaiWordcut);
+    
+    /// Get template (read-only)
+    pub fn template(&self) -> &Template;
+    
+    /// Get template (mutable for modifications)
+    pub fn template_mut(&mut self) -> &mut Template;
+    
+    /// Render with data - clones base PDF, applies data, returns bytes
+    /// Can be called multiple times, each call is independent
     pub fn render(&self, data: &serde_json::Value) -> Result<Vec<u8>>;
-
-    /// Render multiple documents
-    pub fn render_batch(&self, data: Vec<serde_json::Value>) -> Result<Vec<Vec<u8>>>;
 }
 ```
 
-### WASM Crate - PdfBatchRenderer
+### Usage Example (Rust)
+
+```rust
+// Load once
+let mut renderer = TemplateRenderer::new(template_json, pdf_bytes)?;
+renderer.add_font("sarabun", font_bytes);
+renderer.set_wordcut(wordcut);
+
+// Optionally modify template
+renderer.template_mut().blocks[0].set_text("Custom Header");
+
+// Render multiple times - each is independent
+let pdf1 = renderer.render(&json!({"name": "Alice", "amount": 1000}))?;
+let pdf2 = renderer.render(&json!({"name": "Bob", "amount": 2000}))?;
+let pdf3 = renderer.render(&json!({"name": "Charlie", "amount": 3000}))?;
+
+// pdf1, pdf2, pdf3 are completely independent
+std::fs::write("alice.pdf", pdf1)?;
+std::fs::write("bob.pdf", pdf2)?;
+std::fs::write("charlie.pdf", pdf3)?;
+```
+
+### WASM / JavaScript Usage
 
 ```javascript
-// JavaScript API
-class PdfBatchRenderer {
-    // Create from template JSON
-    static fromJson(templateJson: string): PdfBatchRenderer;
+// Load once
+const template = PdfTemplate.fromJson(templateJson);
+template.loadBasePdf(pdfBytes);
+template.loadFont('sarabun', fontBytes);
+template.setWordcut(ThaiWordcut.embedded());
 
-    // Load base PDF template
-    loadBasePdf(data: Uint8Array): void;
+// Render multiple times
+const records = [
+    { name: 'Alice', amount: 1000 },
+    { name: 'Bob', amount: 2000 },
+    { name: 'Charlie', amount: 3000 },
+];
 
-    // Load font
-    loadFont(name: string, data: Uint8Array): void;
-
-    // Set Thai wordcut (optional)
-    setWordcut(wordcut: ThaiWordcut): void;
-
-    // Render single PDF
-    render(data: object): Uint8Array;
-
-    // Render batch of PDFs
-    renderBatch(dataArray: object[]): Uint8Array[];
+for (const record of records) {
+    const pdf = template.render(record);  // Each call is fresh
+    download(pdf, `${record.name}.pdf`);
 }
 ```
 
@@ -161,37 +216,33 @@ class PdfBatchRenderer {
 ```
 examples/
 ├── web/
-│   ├── index.html       # Main HTML page
-│   ├── main.js          # JavaScript for WASM interaction
-│   ├── style.css        # Basic styling
+│   ├── index.html
+│   ├── main.js
+│   ├── style.css
 │   └── sample/
 │       ├── template.json
 │       └── data.json
 └── node/
     ├── package.json
-    ├── render.mjs       # CLI script
+    ├── render.mjs
     └── README.md
+
+scripts/
+└── build-wasm.sh
 ```
 
 ## Tests
 
-- [ ] Unit tests for BatchRenderer in template crate
-- [ ] Test single document rendering matches existing TemplateRenderer
-- [ ] Test batch rendering with multiple data sets
+- [ ] Test render() returns valid PDF bytes
+- [ ] Test multiple render() calls with different data are independent
+- [ ] Test template_mut() changes affect subsequent renders
+- [ ] Test fonts are correctly applied
 - [ ] WASM tests with wasm-bindgen-test
-- [ ] Integration test for Node.js example
-
-## Performance Considerations
-
-1. **Font Reuse**: Fonts are loaded and parsed once, reused across all renders
-2. **Template Parsing**: Template JSON is parsed once
-3. **Memory Management**: Each rendered PDF is returned immediately, no accumulation
-4. **WASM Memory**: Careful with large batch sizes to avoid OOM in browser
 
 ## Notes
 
-- The existing `TemplateRenderer` uses file paths for fonts which doesn't work in WASM
-- New `BatchRenderer` will accept font bytes directly for WASM compatibility
-- Browser example should work offline (all assets bundled)
-- Node.js example should be practical for CLI batch processing workflows
-- Consider adding progress callback for batch rendering in future iteration
+- Breaking change: removes old `render(&mut doc, data)` 
+- Each `render()` clones PDF bytes -> fresh PdfDocument
+- No `render_batch()` - just call `render()` in a loop
+- Fonts stored as bytes, added to each cloned document
+- Wordcut is owned (not borrowed) for simpler lifetime management

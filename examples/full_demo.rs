@@ -210,7 +210,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ========================================
 
     let page2 = doc.add_blank_page()?;
-    println!("Added page 2: {}", page2);
+    println!("Added page 2: {page2}");
 
     // Title for page 2
     doc.set_font("sarabun", 28.0)?;

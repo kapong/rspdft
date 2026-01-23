@@ -1,129 +1,201 @@
 //! Template rendering
 
-use crate::parser::{resolve_binding, value_to_string};
+use crate::parser::{parse_template, resolve_binding, value_to_string};
 use crate::schema::*;
 use crate::{Result, TemplateError};
-use pdf_core::{FontFamilyBuilder, FontStyle as PdfFontStyle, FontWeight, PdfDocument};
+use pdf_core::{FontStyle as PdfFontStyle, FontWeight, PdfDocument};
+use std::collections::HashMap;
 use thai_text::ThaiWordcut;
 
-/// Template renderer
-pub struct TemplateRenderer<'a> {
-    /// The template to render
-    template: &'a Template,
-    /// Thai word segmentation (for word wrapping)
-    wordcut: Option<&'a ThaiWordcut>,
+/// Template renderer with owned resources for reusable rendering
+///
+/// # Example
+/// ```ignore
+/// // Native Rust - auto-load fonts from template paths
+/// let renderer = TemplateRenderer::new(&template_json, pdf_bytes, Some(Path::new(".")))?;
+///
+/// // WASM or manual font loading
+/// let mut renderer = TemplateRenderer::new(&template_json, pdf_bytes, None)?;
+/// renderer.add_font("sarabun", font_bytes);
+/// renderer.set_wordcut(wordcut);
+///
+/// // Render multiple times - each call is independent
+/// let pdf1 = renderer.render(&data1)?;
+/// let pdf2 = renderer.render(&data2)?;
+/// ```
+pub struct TemplateRenderer {
+    /// The template (owned)
+    template: Template,
+    /// Base PDF bytes
+    pdf_bytes: Vec<u8>,
+    /// Fonts loaded from bytes (font_id -> font_bytes)
+    fonts: HashMap<String, Vec<u8>>,
+    /// Thai word segmentation (owned)
+    wordcut: Option<ThaiWordcut>,
 }
 
-impl<'a> TemplateRenderer<'a> {
-    /// Create a new renderer for a template
-    pub fn new(template: &'a Template) -> Self {
-        Self {
-            template,
-            wordcut: None,
-        }
-    }
-
-    /// Set the Thai wordcut for word wrapping
-    pub fn with_wordcut(mut self, wordcut: &'a ThaiWordcut) -> Self {
-        self.wordcut = Some(wordcut);
-        self
-    }
-
-    /// Load all fonts from template into the PDF document
+impl TemplateRenderer {
+    /// Create renderer from template JSON and base PDF bytes
     ///
-    /// This uses the new font family API with variants and fallback support.
-    pub fn load_fonts(&self, doc: &mut PdfDocument) -> Result<()> {
-        for font_def in &self.template.fonts {
-            self.load_font_family(doc, font_def)?;
-        }
-
-        // Set up fallback chains after all fonts are loaded
-        for font_def in &self.template.fonts {
-            if !font_def.fallback.is_empty() {
-                doc.set_font_fallback(&font_def.id, &font_def.fallback)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Load a single font family from definition
-    fn load_font_family(&self, doc: &mut PdfDocument, font_def: &FontDef) -> Result<()> {
-        let mut builder = FontFamilyBuilder::new();
-
-        // Check for new format (variants) or legacy format (single source)
-        let has_variants = font_def.regular.is_some()
-            || font_def.bold.is_some()
-            || font_def.italic.is_some()
-            || font_def.bold_italic.is_some();
-
-        if has_variants {
-            // New format: load specified variants
-            if let Some(ref path) = font_def.regular {
-                let data = std::fs::read(path).map_err(|e| {
-                    TemplateError::RenderError(format!("Failed to read font {}: {}", path, e))
-                })?;
-                builder = builder.regular(data);
-            }
-            if let Some(ref path) = font_def.bold {
-                let data = std::fs::read(path).map_err(|e| {
-                    TemplateError::RenderError(format!("Failed to read font {}: {}", path, e))
-                })?;
-                builder = builder.bold(data);
-            }
-            if let Some(ref path) = font_def.italic {
-                let data = std::fs::read(path).map_err(|e| {
-                    TemplateError::RenderError(format!("Failed to read font {}: {}", path, e))
-                })?;
-                builder = builder.italic(data);
-            }
-            if let Some(ref path) = font_def.bold_italic {
-                let data = std::fs::read(path).map_err(|e| {
-                    TemplateError::RenderError(format!("Failed to read font {}: {}", path, e))
-                })?;
-                builder = builder.bold_italic(data);
-            }
-        } else if let Some(ref path) = font_def.source {
-            // Legacy format: single font as regular variant
-            let data = std::fs::read(path).map_err(|e| {
-                TemplateError::RenderError(format!("Failed to read font {}: {}", path, e))
-            })?;
-            builder = builder.regular(data);
-        } else {
-            return Err(TemplateError::RenderError(format!(
-                "Font '{}' has no source defined",
-                font_def.id
-            )));
-        }
-
-        doc.register_font_family(&font_def.id, builder)?;
-        Ok(())
-    }
-
-    /// Set font on document based on Font specification
-    fn set_font(&self, doc: &mut PdfDocument, font: &Font) -> Result<()> {
-        doc.set_font(&font.family, font.size as f32)?;
-
-        // Set weight and style based on FontStyle enum
-        let (weight, style) = match font.style {
-            FontStyle::Regular => (FontWeight::Regular, PdfFontStyle::Normal),
-            FontStyle::Bold => (FontWeight::Bold, PdfFontStyle::Normal),
-            FontStyle::Italic => (FontWeight::Regular, PdfFontStyle::Italic),
-            FontStyle::BoldItalic => (FontWeight::Bold, PdfFontStyle::Italic),
+    /// If `base_path` is provided (native Rust only), fonts defined in the template
+    /// will be automatically loaded from disk. Pass `None` for WASM or when you want
+    /// to load fonts manually via `add_font()`.
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Native Rust - auto-load fonts from template paths
+    /// let renderer = TemplateRenderer::new(&template_json, pdf_bytes, Some(Path::new(".")))?;
+    ///
+    /// // WASM or manual font loading
+    /// let mut renderer = TemplateRenderer::new(&template_json, pdf_bytes, None)?;
+    /// renderer.add_font("sarabun", font_bytes);
+    /// ```
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn new(
+        template_json: &str,
+        pdf_bytes: Vec<u8>,
+        base_path: Option<&std::path::Path>,
+    ) -> Result<Self> {
+        let template = parse_template(template_json)?;
+        let mut renderer = Self {
+            template,
+            pdf_bytes,
+            fonts: HashMap::new(),
+            wordcut: None,
         };
 
-        doc.set_font_weight(weight)?;
-        doc.set_font_style(style)?;
+        // Auto-load fonts if base_path provided
+        if let Some(path) = base_path {
+            renderer.load_fonts_internal(path)?;
+        }
 
+        Ok(renderer)
+    }
+
+    /// WASM version - no filesystem access, fonts must be added manually
+    #[cfg(target_arch = "wasm32")]
+    pub fn new(template_json: &str, pdf_bytes: Vec<u8>) -> Result<Self> {
+        let template = parse_template(template_json)?;
+        Ok(Self {
+            template,
+            pdf_bytes,
+            fonts: HashMap::new(),
+            wordcut: None,
+        })
+    }
+
+    /// Add font from bytes
+    pub fn add_font(&mut self, name: &str, data: Vec<u8>) {
+        self.fonts.insert(name.to_string(), data);
+    }
+
+    /// Set Thai wordcut for word wrapping
+    pub fn set_wordcut(&mut self, wordcut: ThaiWordcut) {
+        self.wordcut = Some(wordcut);
+    }
+
+    /// Load fonts from file paths defined in the template
+    ///
+    /// For native Rust use - reads font files from disk based on paths in template JSON.
+    /// The base_path is prepended to relative font paths.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let mut renderer = TemplateRenderer::new(&template_json, pdf_bytes, None)?;
+    /// renderer.load_fonts_from_template(Path::new("."))?;  // Load from current dir
+    /// ```
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn load_fonts_from_template(&mut self, base_path: &std::path::Path) -> Result<()> {
+        self.load_fonts_internal(base_path)
+    }
+
+    /// Internal method to load fonts from template paths
+    #[cfg(not(target_arch = "wasm32"))]
+    fn load_fonts_internal(&mut self, base_path: &std::path::Path) -> Result<()> {
+        for font_def in &self.template.fonts {
+            // Load regular variant (or legacy source)
+            if let Some(ref path) = font_def.regular {
+                let full_path = base_path.join(path);
+                let data = std::fs::read(&full_path).map_err(|e| {
+                    TemplateError::FontError(format!("Failed to load font {path}: {e}"))
+                })?;
+                self.fonts.insert(font_def.id.clone(), data);
+            } else if let Some(ref path) = font_def.source {
+                let full_path = base_path.join(path);
+                let data = std::fs::read(&full_path).map_err(|e| {
+                    TemplateError::FontError(format!("Failed to load font {path}: {e}"))
+                })?;
+                self.fonts.insert(font_def.id.clone(), data);
+            }
+
+            // Load bold variant
+            if let Some(ref path) = font_def.bold {
+                let full_path = base_path.join(path);
+                let data = std::fs::read(&full_path).map_err(|e| {
+                    TemplateError::FontError(format!("Failed to load font {path}: {e}"))
+                })?;
+                self.fonts.insert(format!("{}-bold", font_def.id), data);
+            }
+
+            // Load italic variant
+            if let Some(ref path) = font_def.italic {
+                let full_path = base_path.join(path);
+                let data = std::fs::read(&full_path).map_err(|e| {
+                    TemplateError::FontError(format!("Failed to load font {path}: {e}"))
+                })?;
+                self.fonts.insert(format!("{}-italic", font_def.id), data);
+            }
+
+            // Load bold-italic variant
+            if let Some(ref path) = font_def.bold_italic {
+                let full_path = base_path.join(path);
+                let data = std::fs::read(&full_path).map_err(|e| {
+                    TemplateError::FontError(format!("Failed to load font {path}: {e}"))
+                })?;
+                self.fonts
+                    .insert(format!("{}-bold-italic", font_def.id), data);
+            }
+        }
         Ok(())
     }
 
-    /// Render the template with data
+    /// Get template (read-only)
+    pub fn template(&self) -> &Template {
+        &self.template
+    }
+
+    /// Get template (mutable for modifications)
+    pub fn template_mut(&mut self) -> &mut Template {
+        &mut self.template
+    }
+
+    /// Render with data - clones base PDF, applies data, returns bytes
     ///
-    /// # Arguments
-    /// * `doc` - PDF document to render into
-    /// * `data` - Data for binding
-    pub fn render(&self, doc: &mut PdfDocument, data: &serde_json::Value) -> Result<()> {
+    /// Each call creates a fresh PdfDocument from stored pdf_bytes,
+    /// adds fonts, renders template blocks, and returns the output bytes.
+    /// No state is retained between calls.
+    pub fn render(&self, data: &serde_json::Value) -> Result<Vec<u8>> {
+        // 1. Clone base PDF -> fresh document
+        let mut doc = PdfDocument::open_from_bytes(&self.pdf_bytes)
+            .map_err(|e| TemplateError::RenderError(format!("Failed to open PDF: {e}")))?;
+
+        // 2. Add fonts from stored bytes
+        for (name, font_data) in &self.fonts {
+            doc.add_font(name, font_data).map_err(|e| {
+                TemplateError::RenderError(format!("Failed to add font {name}: {e}"))
+            })?;
+        }
+
+        // 3. Render all blocks
+        self.render_blocks(&mut doc, data)?;
+
+        // 4. Return bytes
+        doc.to_bytes()
+            .map_err(|e| TemplateError::RenderError(format!("Failed to save PDF: {e}")))
+    }
+
+    /// Internal: render all blocks to document
+    fn render_blocks(&self, doc: &mut PdfDocument, data: &serde_json::Value) -> Result<()> {
         // Render all blocks
         for block in &self.template.blocks {
             self.render_block(doc, block, data)?;
@@ -202,11 +274,22 @@ impl<'a> TemplateRenderer<'a> {
         // Set font if specified
         if let Some(font) = &block.font {
             self.set_font(doc, font)?;
+
+            // Set text color from font (or default to black)
+            let color = font.color.unwrap_or_default();
+            doc.set_text_color(pdf_core::Color::rgb(
+                color.r as f32,
+                color.g as f32,
+                color.b as f32,
+            ));
+        } else {
+            // No font specified, reset to default black
+            doc.set_text_color(pdf_core::Color::black());
         }
 
         // Handle word wrapping
         let lines = if let Some(wrap) = &block.word_wrap {
-            if let Some(wordcut) = self.wordcut {
+            if let Some(wordcut) = &self.wordcut {
                 wordcut.word_wrap(&formatted_text, wrap.max_chars)
             } else {
                 pdf_core::simple_word_wrap(&formatted_text, wrap.max_chars)
@@ -260,6 +343,17 @@ impl<'a> TemplateRenderer<'a> {
         // Set font if specified
         if let Some(font) = &block.font {
             self.set_font(doc, font)?;
+
+            // Set text color from font (or default to black)
+            let color = font.color.unwrap_or_default();
+            doc.set_text_color(pdf_core::Color::rgb(
+                color.r as f32,
+                color.g as f32,
+                color.b as f32,
+            ));
+        } else {
+            // No font specified, reset to default black
+            doc.set_text_color(pdf_core::Color::black());
         }
 
         // Determine pages to render on
@@ -334,7 +428,7 @@ impl<'a> TemplateRenderer<'a> {
                         let cell_text =
                             row.get(&col.field).map(value_to_string).unwrap_or_default();
 
-                        let lines = if let Some(wordcut) = self.wordcut {
+                        let lines = if let Some(wordcut) = &self.wordcut {
                             wordcut.word_wrap(&cell_text, max_chars)
                         } else {
                             pdf_core::simple_word_wrap(&cell_text, max_chars)
@@ -457,6 +551,24 @@ impl<'a> TemplateRenderer<'a> {
             Some(p) if !p.is_empty() => p.to_vec(),
             _ => (1..=total_pages).collect(),
         }
+    }
+
+    /// Set font on document based on Font specification
+    fn set_font(&self, doc: &mut PdfDocument, font: &Font) -> Result<()> {
+        doc.set_font(&font.family, font.size as f32)?;
+
+        // Set weight and style based on FontStyle enum
+        let (weight, style) = match font.style {
+            FontStyle::Regular => (FontWeight::Regular, PdfFontStyle::Normal),
+            FontStyle::Bold => (FontWeight::Bold, PdfFontStyle::Normal),
+            FontStyle::Italic => (FontWeight::Regular, PdfFontStyle::Italic),
+            FontStyle::BoldItalic => (FontWeight::Bold, PdfFontStyle::Italic),
+        };
+
+        doc.set_font_weight(weight)?;
+        doc.set_font_style(style)?;
+
+        Ok(())
     }
 }
 

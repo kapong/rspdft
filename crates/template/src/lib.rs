@@ -55,6 +55,9 @@ pub enum TemplateError {
 
     #[error("Image error: {0}")]
     ImageError(String),
+
+    #[error("Font error: {0}")]
+    FontError(String),
 }
 
 /// Result type for template operations

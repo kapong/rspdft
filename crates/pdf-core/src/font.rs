@@ -124,9 +124,9 @@ impl FontFamily {
         style: FontStyle,
     ) -> String {
         match (weight, style) {
-            (FontWeight::Bold, FontStyle::Italic) => format!("{}-bold-italic", family_name),
-            (FontWeight::Bold, FontStyle::Normal) => format!("{}-bold", family_name),
-            (FontWeight::Regular, FontStyle::Italic) => format!("{}-italic", family_name),
+            (FontWeight::Bold, FontStyle::Italic) => format!("{family_name}-bold-italic"),
+            (FontWeight::Bold, FontStyle::Normal) => format!("{family_name}-bold"),
+            (FontWeight::Regular, FontStyle::Italic) => format!("{family_name}-italic"),
             (FontWeight::Regular, FontStyle::Normal) => family_name.to_string(),
         }
     }
@@ -179,7 +179,7 @@ impl FontFamilyBuilder {
     pub fn build(self, family_name: &str) -> Result<FontFamily> {
         let regular = if let Some(ttf_data) = self.regular {
             Some(FontData::from_ttf(
-                &format!("{}-regular", family_name),
+                &format!("{family_name}-regular"),
                 &ttf_data,
             )?)
         } else {
@@ -190,17 +190,17 @@ impl FontFamilyBuilder {
 
         let bold = self
             .bold
-            .map(|data| FontData::from_ttf(&format!("{}-bold", family_name), &data))
+            .map(|data| FontData::from_ttf(&format!("{family_name}-bold"), &data))
             .transpose()?;
 
         let italic = self
             .italic
-            .map(|data| FontData::from_ttf(&format!("{}-italic", family_name), &data))
+            .map(|data| FontData::from_ttf(&format!("{family_name}-italic"), &data))
             .transpose()?;
 
         let bold_italic = self
             .bold_italic
-            .map(|data| FontData::from_ttf(&format!("{}-bold-italic", family_name), &data))
+            .map(|data| FontData::from_ttf(&format!("{family_name}-bold-italic"), &data))
             .transpose()?;
 
         Ok(FontFamily {

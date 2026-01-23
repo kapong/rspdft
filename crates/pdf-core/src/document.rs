@@ -214,7 +214,7 @@ impl PdfDocument {
 
         self.font_fallbacks
             .entry(primary.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(fallback.to_string());
 
         Ok(())
@@ -503,17 +503,18 @@ impl PdfDocument {
     /// Get font data by name (searches both families and legacy fonts)
     fn get_font_data(&self, name: &str) -> Result<&FontData> {
         // First try font families
-        for (_family_name, family) in &self.font_families {
+        for family in self.font_families.values() {
             for variant in [
                 &family.regular,
                 &family.bold,
                 &family.italic,
                 &family.bold_italic,
-            ] {
-                if let Some(font_data) = variant {
-                    if font_data.name == name {
-                        return Ok(font_data);
-                    }
+            ]
+            .into_iter()
+            .flatten()
+            {
+                if variant.name == name {
+                    return Ok(variant);
                 }
             }
         }
@@ -527,17 +528,18 @@ impl PdfDocument {
     /// Get mutable font data by name (searches both families and legacy fonts)
     fn get_font_data_mut(&mut self, name: &str) -> Result<&mut FontData> {
         // First try font families
-        for (_family_name, family) in &mut self.font_families {
+        for family in self.font_families.values_mut() {
             for variant in [
                 &mut family.regular,
                 &mut family.bold,
                 &mut family.italic,
                 &mut family.bold_italic,
-            ] {
-                if let Some(font_data) = variant {
-                    if font_data.name == name {
-                        return Ok(font_data);
-                    }
+            ]
+            .into_iter()
+            .flatten()
+            {
+                if variant.name == name {
+                    return Ok(variant);
                 }
             }
         }
@@ -672,6 +674,7 @@ impl PdfDocument {
     /// * `width` - Target width in points
     /// * `height` - Target height in points
     /// * `mode` - Scaling mode
+    #[allow(clippy::too_many_arguments)]
     pub fn insert_image_scaled(
         &mut self,
         data: &[u8],
@@ -746,15 +749,16 @@ impl PdfDocument {
 
         // Add fonts from families
         for family in self.font_families.values() {
-            for variant in [
+            for font_data in [
                 &family.regular,
                 &family.bold,
                 &family.italic,
                 &family.bold_italic,
-            ] {
-                if let Some(font_data) = variant {
-                    font_names.push(font_data.name.clone());
-                }
+            ]
+            .into_iter()
+            .flatten()
+            {
+                font_names.push(font_data.name.clone());
             }
         }
 
@@ -986,11 +990,9 @@ impl PdfDocument {
             }
 
             // Follow Parent reference
-            if let Ok(parent) = dict.get(b"Parent") {
-                if let Object::Reference(parent_id) = parent {
-                    current_id = *parent_id;
-                    continue;
-                }
+            if let Ok(Object::Reference(parent_id)) = dict.get(b"Parent") {
+                current_id = *parent_id;
+                continue;
             }
 
             // No parent, break
