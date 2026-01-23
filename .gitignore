@@ -59,3 +59,5 @@ node_modules/
 *.log
 
 Cargo.lock
+# Cargo.lock (library - not needed for dependents)
+Cargo.lock

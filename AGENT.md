@@ -182,8 +182,10 @@ See `MIGRATION_GUIDE.md` for detailed type and pattern mappings.
 
 Data files are embedded directly in the library at compile time:
 
-- **Thai Dictionary** (`crates/thai-text/data/chula-tnc-2017.txt`)
-  - ~40,000 words from Chulalongkorn University Thai National Corpus 2017
+- **Thai Dictionary** (`crates/thai-text/data/th_TH.dic`)
+  - ~50,000 words from LibreOffice/Hunspell Thai dictionary
+  - Source: https://github.com/LibreOffice/dictionaries/tree/master/th_TH
+  - License: LGPL-3.0
   - Access: `thai_text::EMBEDDED_DICT` or `ThaiWordcut::embedded()`
   
 - **Template Schema** (`crates/template/data/template-schema.json`)

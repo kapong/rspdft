@@ -6,9 +6,10 @@ use std::fs;
 use std::path::Path;
 use std::str::FromStr;
 
-/// Embedded Thai dictionary (Chulalongkorn University TNC 2017)
-/// Contains ~40,000 Thai words for word segmentation
-pub const EMBEDDED_DICT: &str = include_str!("../data/chula-tnc-2017.txt");
+/// Embedded Thai dictionary from LibreOffice/Hunspell
+/// Contains ~50,000 Thai words for word segmentation
+/// Source: https://github.com/LibreOffice/dictionaries/blob/master/th_TH/th_TH.dic
+pub const EMBEDDED_DICT: &str = include_str!("../data/th_TH.dic");
 
 /// Thai word dictionary
 #[derive(Debug, Clone)]
@@ -30,8 +31,8 @@ impl Dictionary {
 
     /// Create dictionary with embedded Thai dictionary (recommended)
     ///
-    /// This uses the built-in Chulalongkorn University TNC 2017 dictionary
-    /// with ~40,000 Thai words.
+    /// This uses the built-in LibreOffice/Hunspell Thai dictionary
+    /// with ~50,000 Thai words.
     pub fn embedded() -> Result<Self> {
         Self::from_str_content(EMBEDDED_DICT)
     }

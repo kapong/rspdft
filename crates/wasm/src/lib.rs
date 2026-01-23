@@ -45,8 +45,8 @@ pub struct ThaiWordcut {
 impl ThaiWordcut {
     /// Create wordcut with embedded Thai dictionary (recommended)
     ///
-    /// Uses the built-in Chulalongkorn University TNC 2017 dictionary
-    /// with ~40,000 Thai words. No external file needed.
+    /// Uses the built-in LibreOffice/Hunspell Thai dictionary
+    /// with ~50,000 Thai words. No external file needed.
     ///
     /// @returns ThaiWordcut instance
     pub fn embedded() -> Result<ThaiWordcut, JsValue> {

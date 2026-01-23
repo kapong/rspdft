@@ -19,8 +19,8 @@ impl ThaiWordcut {
 
     /// Create wordcut with embedded Thai dictionary (recommended)
     ///
-    /// This uses the built-in Chulalongkorn University TNC 2017 dictionary
-    /// with ~40,000 Thai words. No external file needed.
+    /// This uses the built-in LibreOffice/Hunspell Thai dictionary
+    /// with ~50,000 Thai words. No external file needed.
     ///
     /// # Example
     /// ```

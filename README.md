@@ -174,13 +174,30 @@ Use JSONPath-like syntax:
 
 ## Thai Language Support
 
-This library includes full Thai language support with an **embedded dictionary** (~40,000 words from Chulalongkorn University TNC 2017):
+This library includes full Thai language support with an **embedded dictionary** (~50,000 words):
 
 - **Word Segmentation**: Uses dictionary-based longest matching
 - **Line Breaking**: Thai-aware word wrapping
 - **Number Formatting**: Thai numerals (หนึ่ง, สอง, สาม...)
 - **Currency**: Thai baht text (สามหมื่นบาทถ้วน)
 - **Dates**: Thai Buddhist calendar (25 ม.ค. 68)
+
+## Credits & Acknowledgments
+
+### Thai Dictionary
+
+The embedded Thai dictionary is from the **LibreOffice/Hunspell** project.
+
+- **Source**: [LibreOffice Dictionaries - th_TH](https://github.com/LibreOffice/dictionaries/tree/master/th_TH)
+- **License**: LGPL-3.0
+- **Words**: ~50,000 Thai words
+
+### Fonts (included in `fonts/`)
+
+| Font | License | Source |
+|------|---------|--------|
+| **TH Sarabun New** | Public Domain (SIPA) | [SIPA Fonts](https://www.sipa.or.th/) - Software Industry Promotion Agency (Thailand) |
+| **Noto Sans Symbols 2** | OFL 1.1 | [Google Fonts](https://fonts.google.com/noto/specimen/Noto+Sans+Symbols+2) |
 
 ## License
 
