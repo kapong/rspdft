@@ -12,6 +12,7 @@ ab_glyph = { workspace = true }
 ttf-parser = { workspace = true }
 thiserror = { workspace = true }
 flate2 = "1.0"
+subsetter = "0.2"
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

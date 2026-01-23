@@ -18,6 +18,30 @@ struct TextSegment {
     font_name: String,
 }
 
+/// A buffered text operation for deferred encoding
+///
+/// Text is buffered during rendering and encoded during save,
+/// after fonts have been subsetted and glyph IDs remapped.
+#[derive(Debug, Clone)]
+struct BufferedTextOp {
+    /// The text to render
+    text: String,
+    /// Font name (e.g., "sarabun-bold")
+    font_name: String,
+    /// Font resource name (e.g., "F1")
+    font_resource_name: String,
+    /// Page number (1-indexed)
+    page: usize,
+    /// X coordinate (in PDF coordinates, already converted)
+    x: f64,
+    /// Y coordinate (in PDF coordinates, already converted)
+    y: f64,
+    /// Font size in points
+    font_size: f32,
+    /// Text color
+    color: Color,
+}
+
 /// RGB Color (values 0.0 - 1.0)
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Color {
@@ -107,6 +131,8 @@ pub struct PdfDocument {
     font_fallbacks: HashMap<String, Vec<String>>,
     /// Buffered content operators per page (page number -> operators)
     page_content_buffer: HashMap<usize, Vec<u8>>,
+    /// Buffered text operations (encoded during save after font subsetting)
+    buffered_text_ops: Vec<BufferedTextOp>,
 }
 
 impl PdfDocument {
@@ -139,6 +165,7 @@ impl PdfDocument {
             next_image_resource: 1,
             font_fallbacks: HashMap::new(),
             page_content_buffer: HashMap::new(),
+            buffered_text_ops: Vec::new(),
         })
     }
 
@@ -166,6 +193,7 @@ impl PdfDocument {
             next_image_resource: 1,
             font_fallbacks: HashMap::new(),
             page_content_buffer: HashMap::new(),
+            buffered_text_ops: Vec::new(),
         })
     }
 
@@ -476,26 +504,17 @@ impl PdfDocument {
                 font_data.text_width_points(&segment.text, self.current_font_size) as f64
             };
 
-            // Encode text as hex string
-            {
-                let font_data = self.get_font_data(&segment.font_name)?;
-                let text_hex = font_data.encode_text_hex(&segment.text);
-
-                // Create text rendering context
-                let ctx = TextRenderContext {
-                    font_name: font_resource_name,
-                    font_size: self.current_font_size,
-                    text_width: segment_width,
-                    color: self.current_text_color,
-                };
-
-                // Generate PDF text operators (always use left alignment for segments since we've calculated position)
-                let operators =
-                    generate_text_operators(&text_hex, current_x, pdf_y, Align::Left, &ctx);
-
-                // Buffer content operators (will be flushed at save time)
-                self.buffer_content(page, &operators);
-            }
+            // Buffer text operation for deferred encoding (after font subsetting)
+            self.buffered_text_ops.push(BufferedTextOp {
+                text: segment.text.clone(),
+                font_name: segment.font_name.clone(),
+                font_resource_name: font_resource_name.clone(),
+                page,
+                x: current_x,
+                y: pdf_y,
+                font_size: self.current_font_size,
+                color: self.current_text_color,
+            });
 
             // Move to next segment position
             current_x += segment_width;
@@ -721,9 +740,16 @@ impl PdfDocument {
     /// # Arguments
     /// * `path` - Output file path
     pub fn save<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
-        // Flush buffered content streams first
+        // 1. Subset fonts (creates subsets with only used glyphs)
+        self.subset_fonts()?;
+
+        // 2. Encode buffered text with remapped glyph IDs
+        self.encode_buffered_text()?;
+
+        // 3. Flush buffered content streams to pages
         self.flush_content_buffers()?;
-        // TODO: Embed fonts before saving
+
+        // 4. Embed subsetted fonts into PDF
         self.embed_fonts()?;
 
         self.inner
@@ -734,9 +760,16 @@ impl PdfDocument {
 
     /// Save the document to bytes
     pub fn to_bytes(&mut self) -> Result<Vec<u8>> {
-        // Flush buffered content streams first
+        // 1. Subset fonts (creates subsets with only used glyphs)
+        self.subset_fonts()?;
+
+        // 2. Encode buffered text with remapped glyph IDs
+        self.encode_buffered_text()?;
+
+        // 3. Flush buffered content streams to pages
         self.flush_content_buffers()?;
-        // TODO: Embed fonts before saving
+
+        // 4. Embed subsetted fonts into PDF
         self.embed_fonts()?;
 
         let mut buffer = Vec::new();
@@ -747,15 +780,15 @@ impl PdfDocument {
         Ok(buffer)
     }
 
-    /// Embed all added fonts into the PDF
-    fn embed_fonts(&mut self) -> Result<()> {
-        // Clear embedded fonts to force re-embedding with complete character sets
-        self.embedded_fonts.clear();
-
-        // Collect all font names from families and legacy fonts
+    /// Create subsets for all fonts that have been used
+    ///
+    /// This should be called before embed_fonts() to reduce font size.
+    /// Only glyphs that were used (tracked via add_chars) will be included.
+    fn subset_fonts(&mut self) -> Result<()> {
+        // Collect font names that need subsetting
         let mut font_names: Vec<String> = Vec::new();
 
-        // Add fonts from families
+        // From font families
         for family in self.font_families.values() {
             for font_data in [
                 &family.regular,
@@ -766,13 +799,104 @@ impl PdfDocument {
             .into_iter()
             .flatten()
             {
-                font_names.push(font_data.name.clone());
+                // Only subset fonts that have been used
+                if !font_data.used_chars.is_empty() {
+                    font_names.push(font_data.name.clone());
+                }
             }
         }
 
-        // Add legacy fonts
-        for font_name in self.fonts.keys() {
-            font_names.push(font_name.clone());
+        // From legacy fonts
+        for (name, font_data) in &self.fonts {
+            if !font_data.used_chars.is_empty() {
+                font_names.push(name.clone());
+            }
+        }
+
+        // Deduplicate
+        font_names.sort();
+        font_names.dedup();
+
+        // Create subset for each font
+        for font_name in font_names {
+            // Get mutable reference and create subset
+            let font_data = self.get_font_data_mut(&font_name)?;
+            font_data.create_subset()?;
+        }
+
+        Ok(())
+    }
+
+    /// Encode buffered text operations and add to content buffers
+    ///
+    /// This should be called after subset_fonts() to use remapped glyph IDs.
+    /// Processes all buffered text ops, encodes them with remapped GIDs,
+    /// and adds the resulting operators to the page content buffers.
+    fn encode_buffered_text(&mut self) -> Result<()> {
+        // Take ownership of buffered ops to avoid borrow issues
+        let text_ops: Vec<BufferedTextOp> = std::mem::take(&mut self.buffered_text_ops);
+
+        for op in text_ops {
+            // Get font data and encode text with remapped GIDs
+            let text_hex = {
+                let font_data = self.get_font_data(&op.font_name)?;
+                font_data.encode_text_hex_remapped(&op.text)
+            };
+
+            // Calculate text width for alignment (already calculated as Left in insert_text)
+            let text_width = {
+                let font_data = self.get_font_data(&op.font_name)?;
+                font_data.text_width_points(&op.text, op.font_size) as f64
+            };
+
+            // Create text rendering context
+            let ctx = TextRenderContext {
+                font_name: op.font_resource_name,
+                font_size: op.font_size,
+                text_width,
+                color: op.color,
+            };
+
+            // Generate PDF text operators (position already calculated, use Left)
+            let operators = generate_text_operators(&text_hex, op.x, op.y, Align::Left, &ctx);
+
+            // Add to page content buffer
+            self.buffer_content(op.page, &operators);
+        }
+
+        Ok(())
+    }
+
+    /// Embed all added fonts into the PDF
+    fn embed_fonts(&mut self) -> Result<()> {
+        // Clear embedded fonts to force re-embedding with complete character sets
+        self.embedded_fonts.clear();
+
+        // Collect all font names from families and legacy fonts
+        let mut font_names: Vec<String> = Vec::new();
+
+        // Add fonts from families (only those with used characters)
+        for family in self.font_families.values() {
+            for font_data in [
+                &family.regular,
+                &family.bold,
+                &family.italic,
+                &family.bold_italic,
+            ]
+            .into_iter()
+            .flatten()
+            {
+                if !font_data.used_chars.is_empty() {
+                    font_names.push(font_data.name.clone());
+                }
+            }
+        }
+
+        // Add legacy fonts (only those with used characters)
+        for (font_name, font_data) in &self.fonts {
+            if !font_data.used_chars.is_empty() {
+                font_names.push(font_name.clone());
+            }
         }
 
         // Deduplicate
