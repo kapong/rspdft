@@ -28,3 +28,11 @@ path = "../../examples/full_demo.rs"
 [[example]]
 name = "boj45"
 path = "../../examples/boj45.rs"
+
+[[example]]
+name = "debug_fonts"
+path = "../../examples/debug_fonts.rs"
+
+[[example]]
+name = "debug_embed"
+path = "../../examples/debug_embed.rs"

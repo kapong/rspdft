@@ -168,10 +168,21 @@ function handleRender() {
         els.renderPdf.querySelector('.btn-text').textContent = 'Rendering...';
 
         const data = JSON.parse(els.dataJson.value);
+        console.log('Rendering with data:', data);
+
         const pdfBytes = template.render(data);
+        console.log('Rendered PDF bytes:', pdfBytes);
+        console.log('PDF bytes type:', typeof pdfBytes, pdfBytes.constructor.name);
+        console.log('PDF bytes length:', pdfBytes.length || pdfBytes.byteLength);
+
+        // Check PDF header (should start with %PDF-)
+        const header = new TextDecoder().decode(pdfBytes.slice(0, 8));
+        console.log('PDF header:', header);
 
         // Create download
         const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        console.log('Blob size:', blob.size);
+
         const url = URL.createObjectURL(blob);
         const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
         const filename = `boj45_${timestamp}.pdf`;
@@ -193,7 +204,7 @@ function handleRender() {
         link.innerHTML = `
             <span class="icon">📄</span>
             <span class="filename">${filename}</span>
-            <span class="size">${formatBytes(pdfBytes.length)}</span>
+            <span class="size">${formatBytes(pdfBytes.length || pdfBytes.byteLength)}</span>
         `;
         els.downloads.appendChild(link);
 

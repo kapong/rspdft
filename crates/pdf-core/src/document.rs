@@ -105,6 +105,8 @@ pub struct PdfDocument {
     next_image_resource: u32,
     /// Font fallback chains (family -> list of fallback families)
     font_fallbacks: HashMap<String, Vec<String>>,
+    /// Buffered content operators per page (page number -> operators)
+    page_content_buffer: HashMap<usize, Vec<u8>>,
 }
 
 impl PdfDocument {
@@ -136,6 +138,7 @@ impl PdfDocument {
             page_image_resources: HashMap::new(),
             next_image_resource: 1,
             font_fallbacks: HashMap::new(),
+            page_content_buffer: HashMap::new(),
         })
     }
 
@@ -162,6 +165,7 @@ impl PdfDocument {
             page_image_resources: HashMap::new(),
             next_image_resource: 1,
             font_fallbacks: HashMap::new(),
+            page_content_buffer: HashMap::new(),
         })
     }
 
@@ -489,8 +493,8 @@ impl PdfDocument {
                 let operators =
                     generate_text_operators(&text_hex, current_x, pdf_y, Align::Left, &ctx);
 
-                // Append to page's content stream
-                self.append_to_content_stream(page, &operators)?;
+                // Buffer content operators (will be flushed at save time)
+                self.buffer_content(page, &operators);
             }
 
             // Move to next segment position
@@ -706,8 +710,8 @@ impl PdfDocument {
         let operators =
             generate_image_operators(&image_resource_name, x, pdf_y, actual_width, actual_height);
 
-        // Append to page's content stream
-        self.append_to_content_stream(page, &operators)?;
+        // Buffer content operators (will be flushed at save time)
+        self.buffer_content(page, &operators);
 
         Ok(())
     }
@@ -717,6 +721,8 @@ impl PdfDocument {
     /// # Arguments
     /// * `path` - Output file path
     pub fn save<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
+        // Flush buffered content streams first
+        self.flush_content_buffers()?;
         // TODO: Embed fonts before saving
         self.embed_fonts()?;
 
@@ -728,6 +734,8 @@ impl PdfDocument {
 
     /// Save the document to bytes
     pub fn to_bytes(&mut self) -> Result<Vec<u8>> {
+        // Flush buffered content streams first
+        self.flush_content_buffers()?;
         // TODO: Embed fonts before saving
         self.embed_fonts()?;
 
@@ -1029,6 +1037,34 @@ impl PdfDocument {
         Err(PdfError::ParseError("Invalid MediaBox format".to_string()))
     }
 
+    /// Buffer content operators for a page (written at save time)
+    ///
+    /// Instead of immediately appending to content stream (which creates orphan objects),
+    /// this buffers the operators and flushes them all at once during save.
+    fn buffer_content(&mut self, page: usize, content: &[u8]) {
+        self.page_content_buffer
+            .entry(page)
+            .or_default()
+            .extend_from_slice(content);
+    }
+
+    /// Flush all buffered content to page streams
+    ///
+    /// Called once during save/to_bytes. Reads each page's existing content stream,
+    /// appends all buffered operators, and writes a single new stream object per page.
+    fn flush_content_buffers(&mut self) -> Result<()> {
+        // Take ownership of buffer to avoid borrow issues
+        let buffers: Vec<(usize, Vec<u8>)> = self.page_content_buffer.drain().collect();
+
+        for (page, content) in buffers {
+            if !content.is_empty() {
+                self.append_to_content_stream(page, &content)?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Append content to a page's content stream
     ///
     /// Handles both compressed and uncompressed content streams.
@@ -1038,73 +1074,83 @@ impl PdfDocument {
             .get(&(page as u32))
             .ok_or(PdfError::InvalidPage(page, pages.len()))?;
 
-        let page_obj = self.inner.get_object(page_id)?;
-        let page_dict = page_obj
-            .as_dict()
-            .map_err(|_| PdfError::ParseError("Page object is not a dictionary".to_string()))?;
+        // First pass: extract page dict and gather info about content refs
+        // We need to clone data to avoid borrowing issues
+        let (existing_content, page_dict_clone) = {
+            let page_obj = self.inner.get_object(page_id)?;
+            let page_dict = page_obj
+                .as_dict()
+                .map_err(|_| PdfError::ParseError("Page object is not a dictionary".to_string()))?;
 
-        // Get existing content stream
-        let existing_content = match page_dict.get(b"Contents") {
-            Ok(contents) => {
-                match contents {
-                    Object::Stream(stream) => {
-                        // Single stream - decompress if needed
-                        stream
-                            .decompressed_content()
-                            .unwrap_or_else(|_| stream.content.clone())
-                    }
-                    Object::Reference(ref_id) => {
-                        // Contents is a reference to a stream object
-                        if let Ok(Object::Stream(stream)) = self.inner.get_object(*ref_id) {
+            // Clone the page dict for later modification
+            let page_dict_clone = page_dict.clone();
+
+            // Get existing content stream
+            let existing_content = match page_dict.get(b"Contents") {
+                Ok(contents) => {
+                    match contents {
+                        Object::Stream(stream) => {
+                            // Single stream - decompress if needed
                             stream
                                 .decompressed_content()
                                 .unwrap_or_else(|_| stream.content.clone())
-                        } else {
-                            Vec::new()
                         }
-                    }
-                    Object::Array(arr) => {
-                        // Array of streams or references - concatenate them
-                        let mut combined = Vec::new();
-                        for obj in arr {
-                            match obj {
-                                Object::Reference(ref_id) => {
-                                    if let Ok(Object::Stream(stream)) =
-                                        self.inner.get_object(*ref_id)
-                                    {
+                        Object::Reference(ref_id) => {
+                            // Contents is a reference to a stream object
+                            if let Ok(Object::Stream(stream)) = self.inner.get_object(*ref_id) {
+                                stream
+                                    .decompressed_content()
+                                    .unwrap_or_else(|_| stream.content.clone())
+                            } else {
+                                Vec::new()
+                            }
+                        }
+                        Object::Array(arr) => {
+                            // Array of streams or references - concatenate them
+                            let mut combined = Vec::new();
+                            for obj in arr {
+                                match obj {
+                                    Object::Reference(ref_id) => {
+                                        if let Ok(Object::Stream(stream)) =
+                                            self.inner.get_object(*ref_id)
+                                        {
+                                            let data = stream
+                                                .decompressed_content()
+                                                .unwrap_or_else(|_| stream.content.clone());
+                                            combined.extend_from_slice(&data);
+                                        }
+                                    }
+                                    Object::Stream(stream) => {
                                         let data = stream
                                             .decompressed_content()
                                             .unwrap_or_else(|_| stream.content.clone());
                                         combined.extend_from_slice(&data);
                                     }
+                                    _ => {}
                                 }
-                                Object::Stream(stream) => {
-                                    let data = stream
-                                        .decompressed_content()
-                                        .unwrap_or_else(|_| stream.content.clone());
-                                    combined.extend_from_slice(&data);
-                                }
-                                _ => {}
                             }
+                            combined
                         }
-                        combined
+                        _ => Vec::new(),
                     }
-                    _ => Vec::new(),
                 }
-            }
-            Err(_) => Vec::new(),
+                Err(_) => Vec::new(),
+            };
+
+            (existing_content, page_dict_clone)
         };
 
         // Append new content
         let mut new_content = existing_content;
         new_content.extend_from_slice(content);
 
-        // Create new stream
+        // Create new stream and add as indirect object
         let new_stream = Stream::new(Dictionary::new(), new_content);
+        let stream_id = self.inner.add_object(new_stream);
 
-        // Update page dictionary
-        let mut new_page_dict = page_dict.clone();
-        new_page_dict.set(b"Contents", new_stream);
+        // Update page dictionary with reference to stream
+        let mut new_page_dict = page_dict_clone;
+        new_page_dict.set(b"Contents", Object::Reference(stream_id));
 
         // Replace page object
         self.inner.objects.insert(page_id, new_page_dict.into());
