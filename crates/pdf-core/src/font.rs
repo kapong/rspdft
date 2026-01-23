@@ -3,6 +3,7 @@
 use crate::{PdfError, Result};
 use lopdf::{Dictionary, Object, Stream};
 use std::collections::HashSet;
+use subsetter::GlyphRemapper;
 
 /// Font weight
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -31,6 +32,10 @@ pub struct FontData {
     pub used_chars: HashSet<char>,
     /// Parsed font face
     face: Option<ttf_parser::Face<'static>>,
+    /// Subset TTF data (created during save)
+    subset_data: Option<Vec<u8>>,
+    /// Glyph remapper (maps old GID -> new GID after subsetting)
+    glyph_remapper: Option<GlyphRemapper>,
 }
 
 /// PDF objects generated for font embedding
@@ -124,9 +129,9 @@ impl FontFamily {
         style: FontStyle,
     ) -> String {
         match (weight, style) {
-            (FontWeight::Bold, FontStyle::Italic) => format!("{}-bold-italic", family_name),
-            (FontWeight::Bold, FontStyle::Normal) => format!("{}-bold", family_name),
-            (FontWeight::Regular, FontStyle::Italic) => format!("{}-italic", family_name),
+            (FontWeight::Bold, FontStyle::Italic) => format!("{family_name}-bold-italic"),
+            (FontWeight::Bold, FontStyle::Normal) => format!("{family_name}-bold"),
+            (FontWeight::Regular, FontStyle::Italic) => format!("{family_name}-italic"),
             (FontWeight::Regular, FontStyle::Normal) => family_name.to_string(),
         }
     }
@@ -179,7 +184,7 @@ impl FontFamilyBuilder {
     pub fn build(self, family_name: &str) -> Result<FontFamily> {
         let regular = if let Some(ttf_data) = self.regular {
             Some(FontData::from_ttf(
-                &format!("{}-regular", family_name),
+                &format!("{family_name}-regular"),
                 &ttf_data,
             )?)
         } else {
@@ -190,17 +195,17 @@ impl FontFamilyBuilder {
 
         let bold = self
             .bold
-            .map(|data| FontData::from_ttf(&format!("{}-bold", family_name), &data))
+            .map(|data| FontData::from_ttf(&format!("{family_name}-bold"), &data))
             .transpose()?;
 
         let italic = self
             .italic
-            .map(|data| FontData::from_ttf(&format!("{}-italic", family_name), &data))
+            .map(|data| FontData::from_ttf(&format!("{family_name}-italic"), &data))
             .transpose()?;
 
         let bold_italic = self
             .bold_italic
-            .map(|data| FontData::from_ttf(&format!("{}-bold-italic", family_name), &data))
+            .map(|data| FontData::from_ttf(&format!("{family_name}-bold-italic"), &data))
             .transpose()?;
 
         Ok(FontFamily {
@@ -240,6 +245,8 @@ impl FontData {
             ttf_data: data,
             used_chars: HashSet::new(),
             face: Some(face),
+            subset_data: None,
+            glyph_remapper: None,
         })
     }
 
@@ -248,6 +255,50 @@ impl FontData {
         for c in text.chars() {
             self.used_chars.insert(c);
         }
+    }
+
+    /// Create a subset of the font containing only used glyphs
+    ///
+    /// This should be called during save, after all text has been rendered.
+    /// Populates subset_data and glyph_remapper fields.
+    pub fn create_subset(&mut self) -> crate::Result<()> {
+        // Always include .notdef (GID 0)
+        let mut remapper = GlyphRemapper::new();
+        remapper.remap(0);
+
+        // Add glyphs for all used characters
+        for &c in &self.used_chars {
+            if let Some(gid) = self.glyph_id(c) {
+                remapper.remap(gid);
+            }
+        }
+
+        // Create subset
+        let subset = subsetter::subset(&self.ttf_data, 0, &remapper)
+            .map_err(|e| crate::PdfError::FontSubsetError(format!("{:?}", e)))?;
+
+        self.subset_data = Some(subset);
+        self.glyph_remapper = Some(remapper);
+
+        Ok(())
+    }
+
+    /// Get the subset TTF data (must call create_subset first)
+    pub fn get_subset_data(&self) -> Option<&[u8]> {
+        self.subset_data.as_deref()
+    }
+
+    /// Get remapped glyph ID for a character (must call create_subset first)
+    /// Returns the new GID in the subset font
+    pub fn get_remapped_gid(&self, c: char) -> Option<u16> {
+        let old_gid = self.glyph_id(c)?;
+        let remapper = self.glyph_remapper.as_ref()?;
+        remapper.get(old_gid)
+    }
+
+    /// Check if font has been subsetted
+    pub fn is_subsetted(&self) -> bool {
+        self.subset_data.is_some()
     }
 
     /// Get glyph ID for a character
@@ -323,14 +374,13 @@ impl FontData {
             tounicode_content.as_bytes().to_vec(),
         );
 
+        // Use subset data if available, otherwise use full font
+        let font_data_to_embed = self.subset_data.as_ref().unwrap_or(&self.ttf_data);
+
         // Generate font file stream
         let font_file_stream = Stream::new(
-            Dictionary::from_iter(vec![
-                ("Type", "FontDescriptor".into()),
-                ("Subtype", "TrueType".into()),
-                ("Length1", (self.ttf_data.len() as i32).into()),
-            ]),
-            self.ttf_data.clone(),
+            Dictionary::from_iter(vec![("Length1", (font_data_to_embed.len() as i32).into())]),
+            font_data_to_embed.clone(),
         );
 
         // Generate font descriptor
@@ -409,6 +459,25 @@ impl FontData {
         format!("<{result}>")
     }
 
+    /// Encode text as hex string using remapped glyph IDs
+    ///
+    /// This should be called after create_subset() to use the new GID mapping.
+    /// If font hasn't been subsetted, falls back to original GIDs.
+    pub fn encode_text_hex_remapped(&self, text: &str) -> String {
+        let mut result = String::new();
+        for c in text.chars() {
+            let gid = if let Some(new_gid) = self.get_remapped_gid(c) {
+                // Use remapped GID from subset
+                new_gid
+            } else {
+                // Fall back to original GID (font not subsetted or char not found)
+                self.glyph_id(c).unwrap_or(0)
+            };
+            result.push_str(&format!("{gid:04X}"));
+        }
+        format!("<{result}>")
+    }
+
     /// Generate /W array for glyph widths
     fn generate_widths_array(&self) -> Vec<Object> {
         let mut widths = Vec::new();
@@ -433,10 +502,17 @@ impl FontData {
 
         // For simplicity, use individual mapping format: [gid1 [width1] gid2 [width2] ...]
         // This is less optimal than ranges but works correctly for any GID distribution
-        for gid in gids {
-            let glyph_id = ttf_parser::GlyphId(gid);
+        for old_gid in gids {
+            // Use remapped GID if font has been subsetted
+            let new_gid = self
+                .glyph_remapper
+                .as_ref()
+                .and_then(|r| r.get(old_gid))
+                .unwrap_or(old_gid);
+
+            let glyph_id = ttf_parser::GlyphId(old_gid);
             let advance = face.glyph_hor_advance(glyph_id).unwrap_or(1000);
-            widths.push(gid.into());
+            widths.push(new_gid.into());
             widths.push(vec![advance.into()].into());
         }
 
@@ -471,7 +547,13 @@ impl FontData {
             for chunk in chunks {
                 cmap.push_str(&format!("{} beginbfchar\n", chunk.len()));
                 for c in chunk {
-                    let gid = self.glyph_id(*c).unwrap_or(0);
+                    let old_gid = self.glyph_id(*c).unwrap_or(0);
+                    // Use remapped GID if font has been subsetted
+                    let gid = self
+                        .glyph_remapper
+                        .as_ref()
+                        .and_then(|r| r.get(old_gid))
+                        .unwrap_or(old_gid);
                     let unicode = *c as u32;
                     cmap.push_str(&format!("<{gid:04X}> <{unicode:04X}>\n"));
                 }
@@ -520,6 +602,8 @@ mod tests {
             ttf_data: ttf_data.clone(),
             used_chars: HashSet::new(),
             face: None,
+            subset_data: None,
+            glyph_remapper: None,
         };
 
         font.add_chars("Hello");
@@ -538,6 +622,8 @@ mod tests {
             ttf_data,
             used_chars: HashSet::new(),
             face: None,
+            subset_data: None,
+            glyph_remapper: None,
         };
 
         font.add_chars("AB");
@@ -557,6 +643,8 @@ mod tests {
             ttf_data,
             used_chars: HashSet::new(),
             face: None,
+            subset_data: None,
+            glyph_remapper: None,
         };
 
         font.add_chars("สวัสดี");
@@ -575,6 +663,8 @@ mod tests {
             ttf_data: vec![0u8; 100],
             used_chars: HashSet::new(),
             face: None,
+            subset_data: None,
+            glyph_remapper: None,
         };
 
         let units = font.units_per_em();
@@ -588,6 +678,8 @@ mod tests {
             ttf_data: vec![0u8; 100],
             used_chars: HashSet::new(),
             face: None,
+            subset_data: None,
+            glyph_remapper: None,
         };
 
         let ascender = font.ascender();
@@ -604,6 +696,8 @@ mod tests {
             ttf_data: vec![0u8; 100],
             used_chars: HashSet::new(),
             face: None,
+            subset_data: None,
+            glyph_remapper: None,
         };
 
         let width = font.text_width("Hello");
@@ -617,6 +711,8 @@ mod tests {
             ttf_data: vec![0u8; 100],
             used_chars: HashSet::new(),
             face: None,
+            subset_data: None,
+            glyph_remapper: None,
         };
 
         let width = font.text_width("");
@@ -630,6 +726,8 @@ mod tests {
             ttf_data: vec![0u8; 100],
             used_chars: HashSet::new(),
             face: None,
+            subset_data: None,
+            glyph_remapper: None,
         };
 
         let width_12 = font.text_width_points("Hello", 12.0);
@@ -647,6 +745,8 @@ mod tests {
             ttf_data: vec![0u8; 100],
             used_chars: HashSet::new(),
             face: None,
+            subset_data: None,
+            glyph_remapper: None,
         };
 
         let encoded = font.encode_text_hex("");
@@ -660,6 +760,8 @@ mod tests {
             ttf_data: vec![0u8; 100],
             used_chars: HashSet::new(),
             face: None,
+            subset_data: None,
+            glyph_remapper: None,
         };
 
         // Without a face, all characters map to GID 0
@@ -677,6 +779,8 @@ mod tests {
             ttf_data: vec![0u8; 100],
             used_chars: HashSet::new(),
             face: None,
+            subset_data: None,
+            glyph_remapper: None,
         };
 
         // Add some characters so widths array is generated
@@ -701,6 +805,8 @@ mod tests {
             ttf_data: vec![0u8; 100],
             used_chars: HashSet::new(),
             face: None,
+            subset_data: None,
+            glyph_remapper: None,
         };
 
         // Should work even with no characters used
@@ -719,6 +825,8 @@ mod tests {
             ttf_data: vec![0u8; 100],
             used_chars: HashSet::new(),
             face: None,
+            subset_data: None,
+            glyph_remapper: None,
         };
 
         font.add_chars("AB");
@@ -740,6 +848,8 @@ mod tests {
             ttf_data: vec![0u8; 100],
             used_chars: HashSet::new(),
             face: None,
+            subset_data: None,
+            glyph_remapper: None,
         };
 
         let cmap = font.generate_tounicode_cmap();
@@ -757,6 +867,8 @@ mod tests {
             ttf_data: vec![0u8; 100],
             used_chars: HashSet::new(),
             face: None,
+            subset_data: None,
+            glyph_remapper: None,
         };
 
         font.add_chars("สวัสดี");
@@ -775,6 +887,8 @@ mod tests {
             ttf_data: vec![0u8; 100],
             used_chars: HashSet::new(),
             face: None,
+            subset_data: None,
+            glyph_remapper: None,
         };
 
         // Without a face, has_glyph should return false

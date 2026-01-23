@@ -2,6 +2,75 @@
 
 use serde::{Deserialize, Serialize};
 
+/// RGB Color for text
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub struct Color {
+    /// Red component (0.0 - 1.0)
+    pub r: f64,
+    /// Green component (0.0 - 1.0)
+    pub g: f64,
+    /// Blue component (0.0 - 1.0)
+    pub b: f64,
+}
+
+impl Color {
+    /// Create a new RGB color (values 0.0 - 1.0)
+    pub fn rgb(r: f64, g: f64, b: f64) -> Self {
+        Self { r, g, b }
+    }
+
+    /// Create color from RGB values (0-255)
+    pub fn from_rgb(r: u8, g: u8, b: u8) -> Self {
+        Self {
+            r: r as f64 / 255.0,
+            g: g as f64 / 255.0,
+            b: b as f64 / 255.0,
+        }
+    }
+
+    /// Black color
+    pub fn black() -> Self {
+        Self {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+        }
+    }
+
+    /// Red color
+    pub fn red() -> Self {
+        Self {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+        }
+    }
+
+    /// Blue color
+    pub fn blue() -> Self {
+        Self {
+            r: 0.0,
+            g: 0.0,
+            b: 1.0,
+        }
+    }
+
+    /// Gray color
+    pub fn gray() -> Self {
+        Self {
+            r: 0.5,
+            g: 0.5,
+            b: 0.5,
+        }
+    }
+}
+
+impl Default for Color {
+    fn default() -> Self {
+        Self::black()
+    }
+}
+
 /// Embedded JSON Schema for template validation
 /// This schema can be used by IDEs and validators for template authoring
 pub const TEMPLATE_SCHEMA: &str = include_str!("../data/template-schema.json");
@@ -21,12 +90,127 @@ pub struct Template {
 
     /// Content blocks
     pub blocks: Vec<Block>,
+
+    // === Internal state for fluent API (not serialized) ===
+    #[serde(skip)]
+    current_font_family: Option<String>,
+
+    #[serde(skip)]
+    current_font_size: u8,
+
+    #[serde(skip)]
+    current_font_style: FontStyle,
+
+    #[serde(skip)]
+    current_text_color: Option<Color>,
+}
+
+impl Default for Template {
+    fn default() -> Self {
+        Self {
+            version: "2.0".to_string(),
+            template: TemplateSource::default(),
+            fonts: Vec::new(),
+            blocks: Vec::new(),
+            current_font_family: None,
+            current_font_size: 12,
+            current_font_style: FontStyle::Regular,
+            current_text_color: None,
+        }
+    }
+}
+
+impl Template {
+    /// Set current font family and size for subsequent text insertions
+    pub fn set_font(&mut self, family: &str, size: u8) -> &mut Self {
+        self.current_font_family = Some(family.to_string());
+        self.current_font_size = size;
+        self.current_font_style = FontStyle::Regular; // Reset style when changing font
+        self
+    }
+
+    /// Set font style (bold, italic, etc.) for subsequent text insertions
+    pub fn set_font_style(&mut self, style: FontStyle) -> &mut Self {
+        self.current_font_style = style;
+        self
+    }
+
+    /// Set text color for subsequent text insertions
+    pub fn set_text_color(&mut self, color: Color) -> &mut Self {
+        self.current_text_color = Some(color);
+        self
+    }
+
+    /// Insert static text at position
+    ///
+    /// Uses the current font settings from `set_font()` and `set_font_style()`.
+    pub fn insert_text(
+        &mut self,
+        text: &str,
+        page: usize,
+        x: f64,
+        y: f64,
+        align: Align,
+    ) -> &mut Self {
+        let block = Block::Text(TextBlock {
+            id: None,
+            bind: None,
+            text: Some(text.to_string()),
+            position: Position { x, y },
+            font: self.current_font_family.as_ref().map(|family| Font {
+                family: family.clone(),
+                size: self.current_font_size,
+                style: self.current_font_style,
+                color: self.current_text_color,
+            }),
+            align,
+            word_wrap: None,
+            format: None,
+            format_type: None,
+            pages: Some(vec![page]),
+            enable: None,
+        });
+        self.blocks.push(block);
+        self
+    }
+
+    /// Insert text with data binding at position
+    pub fn insert_binding(
+        &mut self,
+        bind: &str,
+        page: usize,
+        x: f64,
+        y: f64,
+        align: Align,
+    ) -> &mut Self {
+        let block = Block::Text(TextBlock {
+            id: None,
+            bind: Some(bind.to_string()),
+            text: None,
+            position: Position { x, y },
+            font: self.current_font_family.as_ref().map(|family| Font {
+                family: family.clone(),
+                size: self.current_font_size,
+                style: self.current_font_style,
+                color: self.current_text_color,
+            }),
+            align,
+            word_wrap: None,
+            format: None,
+            format_type: None,
+            pages: Some(vec![page]),
+            enable: None,
+        });
+        self.blocks.push(block);
+        self
+    }
 }
 
 /// Template source configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TemplateSource {
     /// Path to base PDF or base64-encoded data
+    #[serde(default)]
     pub source: String,
 
     /// Duplicate blocks with offset (for duplicate receipts)
@@ -124,6 +308,10 @@ pub struct Font {
     /// Font style
     #[serde(default)]
     pub style: FontStyle,
+
+    /// Text color (RGB, values 0.0-1.0)
+    #[serde(default)]
+    pub color: Option<Color>,
 }
 
 fn default_font_size() -> u8 {

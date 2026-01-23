@@ -12,6 +12,7 @@ ab_glyph = { workspace = true }
 ttf-parser = { workspace = true }
 thiserror = { workspace = true }
 flate2 = "1.0"
+subsetter = "0.2"
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
@@ -28,3 +29,11 @@ path = "../../examples/full_demo.rs"
 [[example]]
 name = "boj45"
 path = "../../examples/boj45.rs"
+
+[[example]]
+name = "debug_fonts"
+path = "../../examples/debug_fonts.rs"
+
+[[example]]
+name = "debug_embed"
+path = "../../examples/debug_embed.rs"

@@ -1,0 +1,23 @@
+[
+  {
+    "_filename": "invoice_001.pdf",
+    "invoice_no": "INV-2025-001",
+    "customer": { "name": "บริษัท ก. จำกัด" },
+    "amount": 15000.00,
+    "date": "2025-01-23"
+  },
+  {
+    "_filename": "invoice_002.pdf",
+    "invoice_no": "INV-2025-002",
+    "customer": { "name": "บริษัท ข. จำกัด" },
+    "amount": 28750.50,
+    "date": "2025-01-23"
+  },
+  {
+    "_filename": "invoice_003.pdf",
+    "invoice_no": "INV-2025-003",
+    "customer": { "name": "คุณสมชาย ใจดี" },
+    "amount": 5500.00,
+    "date": "2025-01-24"
+  }
+]

@@ -18,6 +18,30 @@ struct TextSegment {
     font_name: String,
 }
 
+/// A buffered text operation for deferred encoding
+///
+/// Text is buffered during rendering and encoded during save,
+/// after fonts have been subsetted and glyph IDs remapped.
+#[derive(Debug, Clone)]
+struct BufferedTextOp {
+    /// The text to render
+    text: String,
+    /// Font name (e.g., "sarabun-bold")
+    font_name: String,
+    /// Font resource name (e.g., "F1")
+    font_resource_name: String,
+    /// Page number (1-indexed)
+    page: usize,
+    /// X coordinate (in PDF coordinates, already converted)
+    x: f64,
+    /// Y coordinate (in PDF coordinates, already converted)
+    y: f64,
+    /// Font size in points
+    font_size: f32,
+    /// Text color
+    color: Color,
+}
+
 /// RGB Color (values 0.0 - 1.0)
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Color {
@@ -105,6 +129,10 @@ pub struct PdfDocument {
     next_image_resource: u32,
     /// Font fallback chains (family -> list of fallback families)
     font_fallbacks: HashMap<String, Vec<String>>,
+    /// Buffered content operators per page (page number -> operators)
+    page_content_buffer: HashMap<usize, Vec<u8>>,
+    /// Buffered text operations (encoded during save after font subsetting)
+    buffered_text_ops: Vec<BufferedTextOp>,
 }
 
 impl PdfDocument {
@@ -136,6 +164,8 @@ impl PdfDocument {
             page_image_resources: HashMap::new(),
             next_image_resource: 1,
             font_fallbacks: HashMap::new(),
+            page_content_buffer: HashMap::new(),
+            buffered_text_ops: Vec::new(),
         })
     }
 
@@ -162,6 +192,8 @@ impl PdfDocument {
             page_image_resources: HashMap::new(),
             next_image_resource: 1,
             font_fallbacks: HashMap::new(),
+            page_content_buffer: HashMap::new(),
+            buffered_text_ops: Vec::new(),
         })
     }
 
@@ -214,7 +246,7 @@ impl PdfDocument {
 
         self.font_fallbacks
             .entry(primary.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(fallback.to_string());
 
         Ok(())
@@ -411,6 +443,11 @@ impl PdfDocument {
             return Err(PdfError::InvalidPage(page, page_count));
         }
 
+        // Skip empty text - nothing to render
+        if text.is_empty() {
+            return Ok(());
+        }
+
         // Get the current font family name
         let family_name = self
             .current_family
@@ -472,26 +509,17 @@ impl PdfDocument {
                 font_data.text_width_points(&segment.text, self.current_font_size) as f64
             };
 
-            // Encode text as hex string
-            {
-                let font_data = self.get_font_data(&segment.font_name)?;
-                let text_hex = font_data.encode_text_hex(&segment.text);
-
-                // Create text rendering context
-                let ctx = TextRenderContext {
-                    font_name: font_resource_name,
-                    font_size: self.current_font_size,
-                    text_width: segment_width,
-                    color: self.current_text_color,
-                };
-
-                // Generate PDF text operators (always use left alignment for segments since we've calculated position)
-                let operators =
-                    generate_text_operators(&text_hex, current_x, pdf_y, Align::Left, &ctx);
-
-                // Append to page's content stream
-                self.append_to_content_stream(page, &operators)?;
-            }
+            // Buffer text operation for deferred encoding (after font subsetting)
+            self.buffered_text_ops.push(BufferedTextOp {
+                text: segment.text.clone(),
+                font_name: segment.font_name.clone(),
+                font_resource_name: font_resource_name.clone(),
+                page,
+                x: current_x,
+                y: pdf_y,
+                font_size: self.current_font_size,
+                color: self.current_text_color,
+            });
 
             // Move to next segment position
             current_x += segment_width;
@@ -503,17 +531,18 @@ impl PdfDocument {
     /// Get font data by name (searches both families and legacy fonts)
     fn get_font_data(&self, name: &str) -> Result<&FontData> {
         // First try font families
-        for (_family_name, family) in &self.font_families {
+        for family in self.font_families.values() {
             for variant in [
                 &family.regular,
                 &family.bold,
                 &family.italic,
                 &family.bold_italic,
-            ] {
-                if let Some(font_data) = variant {
-                    if font_data.name == name {
-                        return Ok(font_data);
-                    }
+            ]
+            .into_iter()
+            .flatten()
+            {
+                if variant.name == name {
+                    return Ok(variant);
                 }
             }
         }
@@ -527,17 +556,18 @@ impl PdfDocument {
     /// Get mutable font data by name (searches both families and legacy fonts)
     fn get_font_data_mut(&mut self, name: &str) -> Result<&mut FontData> {
         // First try font families
-        for (_family_name, family) in &mut self.font_families {
+        for family in self.font_families.values_mut() {
             for variant in [
                 &mut family.regular,
                 &mut family.bold,
                 &mut family.italic,
                 &mut family.bold_italic,
-            ] {
-                if let Some(font_data) = variant {
-                    if font_data.name == name {
-                        return Ok(font_data);
-                    }
+            ]
+            .into_iter()
+            .flatten()
+            {
+                if variant.name == name {
+                    return Ok(variant);
                 }
             }
         }
@@ -672,6 +702,7 @@ impl PdfDocument {
     /// * `width` - Target width in points
     /// * `height` - Target height in points
     /// * `mode` - Scaling mode
+    #[allow(clippy::too_many_arguments)]
     pub fn insert_image_scaled(
         &mut self,
         data: &[u8],
@@ -703,8 +734,8 @@ impl PdfDocument {
         let operators =
             generate_image_operators(&image_resource_name, x, pdf_y, actual_width, actual_height);
 
-        // Append to page's content stream
-        self.append_to_content_stream(page, &operators)?;
+        // Buffer content operators (will be flushed at save time)
+        self.buffer_content(page, &operators);
 
         Ok(())
     }
@@ -714,7 +745,16 @@ impl PdfDocument {
     /// # Arguments
     /// * `path` - Output file path
     pub fn save<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
-        // TODO: Embed fonts before saving
+        // 1. Subset fonts (creates subsets with only used glyphs)
+        self.subset_fonts()?;
+
+        // 2. Encode buffered text with remapped glyph IDs
+        self.encode_buffered_text()?;
+
+        // 3. Flush buffered content streams to pages
+        self.flush_content_buffers()?;
+
+        // 4. Embed subsetted fonts into PDF
         self.embed_fonts()?;
 
         self.inner
@@ -725,7 +765,16 @@ impl PdfDocument {
 
     /// Save the document to bytes
     pub fn to_bytes(&mut self) -> Result<Vec<u8>> {
-        // TODO: Embed fonts before saving
+        // 1. Subset fonts (creates subsets with only used glyphs)
+        self.subset_fonts()?;
+
+        // 2. Encode buffered text with remapped glyph IDs
+        self.encode_buffered_text()?;
+
+        // 3. Flush buffered content streams to pages
+        self.flush_content_buffers()?;
+
+        // 4. Embed subsetted fonts into PDF
         self.embed_fonts()?;
 
         let mut buffer = Vec::new();
@@ -736,6 +785,93 @@ impl PdfDocument {
         Ok(buffer)
     }
 
+    /// Create subsets for all fonts that have been used
+    ///
+    /// This should be called before embed_fonts() to reduce font size.
+    /// Only glyphs that were used (tracked via add_chars) will be included.
+    fn subset_fonts(&mut self) -> Result<()> {
+        // Collect font names that need subsetting
+        let mut font_names: Vec<String> = Vec::new();
+
+        // From font families
+        for family in self.font_families.values() {
+            for font_data in [
+                &family.regular,
+                &family.bold,
+                &family.italic,
+                &family.bold_italic,
+            ]
+            .into_iter()
+            .flatten()
+            {
+                // Only subset fonts that have been used
+                if !font_data.used_chars.is_empty() {
+                    font_names.push(font_data.name.clone());
+                }
+            }
+        }
+
+        // From legacy fonts
+        for (name, font_data) in &self.fonts {
+            if !font_data.used_chars.is_empty() {
+                font_names.push(name.clone());
+            }
+        }
+
+        // Deduplicate
+        font_names.sort();
+        font_names.dedup();
+
+        // Create subset for each font
+        for font_name in font_names {
+            // Get mutable reference and create subset
+            let font_data = self.get_font_data_mut(&font_name)?;
+            font_data.create_subset()?;
+        }
+
+        Ok(())
+    }
+
+    /// Encode buffered text operations and add to content buffers
+    ///
+    /// This should be called after subset_fonts() to use remapped glyph IDs.
+    /// Processes all buffered text ops, encodes them with remapped GIDs,
+    /// and adds the resulting operators to the page content buffers.
+    fn encode_buffered_text(&mut self) -> Result<()> {
+        // Take ownership of buffered ops to avoid borrow issues
+        let text_ops: Vec<BufferedTextOp> = std::mem::take(&mut self.buffered_text_ops);
+
+        for op in text_ops {
+            // Get font data and encode text with remapped GIDs
+            let text_hex = {
+                let font_data = self.get_font_data(&op.font_name)?;
+                font_data.encode_text_hex_remapped(&op.text)
+            };
+
+            // Calculate text width for alignment (already calculated as Left in insert_text)
+            let text_width = {
+                let font_data = self.get_font_data(&op.font_name)?;
+                font_data.text_width_points(&op.text, op.font_size) as f64
+            };
+
+            // Create text rendering context
+            let ctx = TextRenderContext {
+                font_name: op.font_resource_name,
+                font_size: op.font_size,
+                text_width,
+                color: op.color,
+            };
+
+            // Generate PDF text operators (position already calculated, use Left)
+            let operators = generate_text_operators(&text_hex, op.x, op.y, Align::Left, &ctx);
+
+            // Add to page content buffer
+            self.buffer_content(op.page, &operators);
+        }
+
+        Ok(())
+    }
+
     /// Embed all added fonts into the PDF
     fn embed_fonts(&mut self) -> Result<()> {
         // Clear embedded fonts to force re-embedding with complete character sets
@@ -744,23 +880,28 @@ impl PdfDocument {
         // Collect all font names from families and legacy fonts
         let mut font_names: Vec<String> = Vec::new();
 
-        // Add fonts from families
+        // Add fonts from families (only those with used characters)
         for family in self.font_families.values() {
-            for variant in [
+            for font_data in [
                 &family.regular,
                 &family.bold,
                 &family.italic,
                 &family.bold_italic,
-            ] {
-                if let Some(font_data) = variant {
+            ]
+            .into_iter()
+            .flatten()
+            {
+                if !font_data.used_chars.is_empty() {
                     font_names.push(font_data.name.clone());
                 }
             }
         }
 
-        // Add legacy fonts
-        for font_name in self.fonts.keys() {
-            font_names.push(font_name.clone());
+        // Add legacy fonts (only those with used characters)
+        for (font_name, font_data) in &self.fonts {
+            if !font_data.used_chars.is_empty() {
+                font_names.push(font_name.clone());
+            }
         }
 
         // Deduplicate
@@ -986,11 +1127,9 @@ impl PdfDocument {
             }
 
             // Follow Parent reference
-            if let Ok(parent) = dict.get(b"Parent") {
-                if let Object::Reference(parent_id) = parent {
-                    current_id = *parent_id;
-                    continue;
-                }
+            if let Ok(Object::Reference(parent_id)) = dict.get(b"Parent") {
+                current_id = *parent_id;
+                continue;
             }
 
             // No parent, break
@@ -1027,6 +1166,34 @@ impl PdfDocument {
         Err(PdfError::ParseError("Invalid MediaBox format".to_string()))
     }
 
+    /// Buffer content operators for a page (written at save time)
+    ///
+    /// Instead of immediately appending to content stream (which creates orphan objects),
+    /// this buffers the operators and flushes them all at once during save.
+    fn buffer_content(&mut self, page: usize, content: &[u8]) {
+        self.page_content_buffer
+            .entry(page)
+            .or_default()
+            .extend_from_slice(content);
+    }
+
+    /// Flush all buffered content to page streams
+    ///
+    /// Called once during save/to_bytes. Reads each page's existing content stream,
+    /// appends all buffered operators, and writes a single new stream object per page.
+    fn flush_content_buffers(&mut self) -> Result<()> {
+        // Take ownership of buffer to avoid borrow issues
+        let buffers: Vec<(usize, Vec<u8>)> = self.page_content_buffer.drain().collect();
+
+        for (page, content) in buffers {
+            if !content.is_empty() {
+                self.append_to_content_stream(page, &content)?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Append content to a page's content stream
     ///
     /// Handles both compressed and uncompressed content streams.
@@ -1036,73 +1203,83 @@ impl PdfDocument {
             .get(&(page as u32))
             .ok_or(PdfError::InvalidPage(page, pages.len()))?;
 
-        let page_obj = self.inner.get_object(page_id)?;
-        let page_dict = page_obj
-            .as_dict()
-            .map_err(|_| PdfError::ParseError("Page object is not a dictionary".to_string()))?;
+        // First pass: extract page dict and gather info about content refs
+        // We need to clone data to avoid borrowing issues
+        let (existing_content, page_dict_clone) = {
+            let page_obj = self.inner.get_object(page_id)?;
+            let page_dict = page_obj
+                .as_dict()
+                .map_err(|_| PdfError::ParseError("Page object is not a dictionary".to_string()))?;
 
-        // Get existing content stream
-        let existing_content = match page_dict.get(b"Contents") {
-            Ok(contents) => {
-                match contents {
-                    Object::Stream(stream) => {
-                        // Single stream - decompress if needed
-                        stream
-                            .decompressed_content()
-                            .unwrap_or_else(|_| stream.content.clone())
-                    }
-                    Object::Reference(ref_id) => {
-                        // Contents is a reference to a stream object
-                        if let Ok(Object::Stream(stream)) = self.inner.get_object(*ref_id) {
+            // Clone the page dict for later modification
+            let page_dict_clone = page_dict.clone();
+
+            // Get existing content stream
+            let existing_content = match page_dict.get(b"Contents") {
+                Ok(contents) => {
+                    match contents {
+                        Object::Stream(stream) => {
+                            // Single stream - decompress if needed
                             stream
                                 .decompressed_content()
                                 .unwrap_or_else(|_| stream.content.clone())
-                        } else {
-                            Vec::new()
                         }
-                    }
-                    Object::Array(arr) => {
-                        // Array of streams or references - concatenate them
-                        let mut combined = Vec::new();
-                        for obj in arr {
-                            match obj {
-                                Object::Reference(ref_id) => {
-                                    if let Ok(Object::Stream(stream)) =
-                                        self.inner.get_object(*ref_id)
-                                    {
+                        Object::Reference(ref_id) => {
+                            // Contents is a reference to a stream object
+                            if let Ok(Object::Stream(stream)) = self.inner.get_object(*ref_id) {
+                                stream
+                                    .decompressed_content()
+                                    .unwrap_or_else(|_| stream.content.clone())
+                            } else {
+                                Vec::new()
+                            }
+                        }
+                        Object::Array(arr) => {
+                            // Array of streams or references - concatenate them
+                            let mut combined = Vec::new();
+                            for obj in arr {
+                                match obj {
+                                    Object::Reference(ref_id) => {
+                                        if let Ok(Object::Stream(stream)) =
+                                            self.inner.get_object(*ref_id)
+                                        {
+                                            let data = stream
+                                                .decompressed_content()
+                                                .unwrap_or_else(|_| stream.content.clone());
+                                            combined.extend_from_slice(&data);
+                                        }
+                                    }
+                                    Object::Stream(stream) => {
                                         let data = stream
                                             .decompressed_content()
                                             .unwrap_or_else(|_| stream.content.clone());
                                         combined.extend_from_slice(&data);
                                     }
+                                    _ => {}
                                 }
-                                Object::Stream(stream) => {
-                                    let data = stream
-                                        .decompressed_content()
-                                        .unwrap_or_else(|_| stream.content.clone());
-                                    combined.extend_from_slice(&data);
-                                }
-                                _ => {}
                             }
+                            combined
                         }
-                        combined
+                        _ => Vec::new(),
                     }
-                    _ => Vec::new(),
                 }
-            }
-            Err(_) => Vec::new(),
+                Err(_) => Vec::new(),
+            };
+
+            (existing_content, page_dict_clone)
         };
 
         // Append new content
         let mut new_content = existing_content;
         new_content.extend_from_slice(content);
 
-        // Create new stream
+        // Create new stream and add as indirect object
         let new_stream = Stream::new(Dictionary::new(), new_content);
+        let stream_id = self.inner.add_object(new_stream);
 
-        // Update page dictionary
-        let mut new_page_dict = page_dict.clone();
-        new_page_dict.set(b"Contents", new_stream);
+        // Update page dictionary with reference to stream
+        let mut new_page_dict = page_dict_clone;
+        new_page_dict.set(b"Contents", Object::Reference(stream_id));
 
         // Replace page object
         self.inner.objects.insert(page_id, new_page_dict.into());

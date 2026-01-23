@@ -1,0 +1,13 @@
+{
+  "name": "rspdft-node-example",
+  "version": "1.0.0",
+  "description": "Node.js CLI example for rspdft batch PDF generation",
+  "type": "module",
+  "main": "render.mjs",
+  "scripts": {
+    "render": "node render.mjs",
+    "demo": "node render.mjs -t sample/template.json -p sample/base.pdf -f sarabun:../../fonts/THSarabunNew.ttf -d sample/records.json -o output"
+  },
+  "keywords": ["pdf", "template", "rspdft", "wasm"],
+  "license": "MIT"
+}

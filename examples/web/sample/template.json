@@ -1,0 +1,62 @@
+{
+  "version": "2.0",
+  "template": {
+    "source": "sample.pdf"
+  },
+  "fonts": [
+    {
+      "id": "sarabun",
+      "regular": "fonts/THSarabunNew.ttf"
+    }
+  ],
+  "blocks": [
+    {
+      "id": "title",
+      "type": "text",
+      "text": "Invoice",
+      "position": { "x": 297, "y": 50 },
+      "font": { "family": "sarabun", "size": 24, "style": "bold" },
+      "align": "center"
+    },
+    {
+      "id": "customer_name",
+      "type": "text",
+      "bind": "$.customer.name",
+      "position": { "x": 100, "y": 100 },
+      "font": { "family": "sarabun", "size": 14 }
+    },
+    {
+      "id": "amount",
+      "type": "text",
+      "bind": "$.amount",
+      "position": { "x": 450, "y": 200 },
+      "font": { "family": "sarabun", "size": 16 },
+      "format": "#,###.##",
+      "align": "right"
+    },
+    {
+      "id": "amount_text",
+      "type": "text",
+      "bind": "$.amount",
+      "position": { "x": 100, "y": 220 },
+      "font": { "family": "sarabun", "size": 12 },
+      "formatType": "thai-baht"
+    },
+    {
+      "id": "date",
+      "type": "text",
+      "bind": "$.date",
+      "position": { "x": 450, "y": 100 },
+      "font": { "family": "sarabun", "size": 12 },
+      "formatType": "thai-date-long",
+      "align": "right"
+    },
+    {
+      "id": "qr",
+      "type": "qrcode",
+      "bind": "$.qr_data",
+      "position": { "x": 450, "y": 700 },
+      "size": { "width": 80, "height": 80 }
+    }
+  ]
+}

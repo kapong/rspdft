@@ -48,6 +48,9 @@ pub enum PdfError {
     #[error("Failed to parse font: {0}")]
     FontParseError(String),
 
+    #[error("Font subset error: {0}")]
+    FontSubsetError(String),
+
     #[error("Invalid page number: {0} (document has {1} pages)")]
     InvalidPage(usize, usize),
 

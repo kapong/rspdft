@@ -81,19 +81,46 @@
     "font": {
       "type": "object",
       "properties": {
-        "family": { 
+        "family": {
           "type": "string",
           "description": "Font ID reference"
         },
-        "size": { 
-          "type": "integer", 
+        "size": {
+          "type": "integer",
           "default": 12,
           "description": "Font size in points"
         },
-        "style": { 
-          "type": "string", 
+        "style": {
+          "type": "string",
           "enum": ["regular", "bold", "italic", "bold-italic"],
           "default": "regular"
+        },
+        "color": {
+          "type": "object",
+          "description": "Text color in RGB (values 0.0-1.0)",
+          "properties": {
+            "r": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.0,
+              "description": "Red component (0.0-1.0)"
+            },
+            "g": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.0,
+              "description": "Green component (0.0-1.0)"
+            },
+            "b": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.0,
+              "description": "Blue component (0.0-1.0)"
+            }
+          }
         }
       }
     },

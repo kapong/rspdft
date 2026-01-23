@@ -22,9 +22,10 @@
 //! const template = PdfTemplate.fromJson(templateJson);
 //! template.loadBasePdf(pdfBytes);
 //! template.loadFont('sarabun', fontBytes);
+//! template.setWordcut(wordcut);
 //!
 //! // Render
-//! const output = template.render({ name: "Test" }, wordcut);
+//! const output = template.render({ name: "Test" });
 //! ```
 
 use wasm_bindgen::prelude::*;
@@ -162,9 +163,11 @@ impl ThaiFormatter {
 /// PDF Template renderer
 #[wasm_bindgen]
 pub struct PdfTemplate {
-    template: Option<template::Template>,
+    renderer: Option<template::TemplateRenderer>,
+    template_json: Option<String>,
     pdf_bytes: Option<Vec<u8>>,
     fonts: std::collections::HashMap<String, Vec<u8>>,
+    wordcut: Option<thai_text::ThaiWordcut>,
 }
 
 #[wasm_bindgen]
@@ -173,9 +176,11 @@ impl PdfTemplate {
     #[wasm_bindgen(constructor)]
     pub fn new() -> PdfTemplate {
         PdfTemplate {
-            template: None,
+            renderer: None,
+            template_json: None,
             pdf_bytes: None,
             fonts: std::collections::HashMap::new(),
+            wordcut: None,
         }
     }
 
@@ -185,13 +190,12 @@ impl PdfTemplate {
     /// @returns PdfTemplate instance
     #[wasm_bindgen(js_name = fromJson)]
     pub fn from_json(json: &str) -> Result<PdfTemplate, JsValue> {
-        let template =
-            template::parse_template(json).map_err(|e| JsValue::from_str(&e.to_string()))?;
-
         Ok(PdfTemplate {
-            template: Some(template),
+            renderer: None,
+            template_json: Some(json.to_string()),
             pdf_bytes: None,
             fonts: std::collections::HashMap::new(),
+            wordcut: None,
         })
     }
 
@@ -201,6 +205,7 @@ impl PdfTemplate {
     #[wasm_bindgen(js_name = loadBasePdf)]
     pub fn load_base_pdf(&mut self, data: &[u8]) -> Result<(), JsValue> {
         self.pdf_bytes = Some(data.to_vec());
+        self.rebuild_renderer()?;
         Ok(())
     }
 
@@ -211,53 +216,70 @@ impl PdfTemplate {
     #[wasm_bindgen(js_name = loadFont)]
     pub fn load_font(&mut self, name: &str, data: &[u8]) -> Result<(), JsValue> {
         self.fonts.insert(name.to_string(), data.to_vec());
+        // Update renderer if it exists
+        if let Some(ref mut renderer) = self.renderer {
+            renderer.add_font(name, data.to_vec());
+        }
+        Ok(())
+    }
+
+    /// Set Thai wordcut for word wrapping
+    ///
+    /// @param wordcut - ThaiWordcut instance
+    #[wasm_bindgen(js_name = setWordcut)]
+    pub fn set_wordcut(&mut self, wordcut: &ThaiWordcut) -> Result<(), JsValue> {
+        // Clone the inner wordcut
+        self.wordcut = Some(wordcut.inner.clone());
+        // Update renderer if it exists
+        if let Some(ref mut renderer) = self.renderer {
+            if let Some(ref wc) = self.wordcut {
+                renderer.set_wordcut(wc.clone());
+            }
+        }
+        Ok(())
+    }
+
+    /// Rebuild the internal renderer when template_json and pdf_bytes are both available
+    fn rebuild_renderer(&mut self) -> Result<(), JsValue> {
+        if let (Some(json), Some(pdf)) = (&self.template_json, &self.pdf_bytes) {
+            #[cfg(target_arch = "wasm32")]
+            let mut renderer = template::TemplateRenderer::new(json, pdf.clone())
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+            #[cfg(not(target_arch = "wasm32"))]
+            let mut renderer = template::TemplateRenderer::new(json, pdf.clone(), None)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+            // Add all fonts
+            for (name, data) in &self.fonts {
+                renderer.add_font(name, data.clone());
+            }
+
+            // Set wordcut if available
+            if let Some(ref wc) = self.wordcut {
+                renderer.set_wordcut(wc.clone());
+            }
+
+            self.renderer = Some(renderer);
+        }
         Ok(())
     }
 
     /// Render PDF with data
     ///
     /// @param data - Data object for binding
-    /// @param wordcut - ThaiWordcut instance (optional)
     /// @returns PDF bytes (Uint8Array)
-    pub fn render(&self, data: JsValue, wordcut: Option<ThaiWordcut>) -> Result<Vec<u8>, JsValue> {
-        let template = self
-            .template
-            .as_ref()
-            .ok_or_else(|| JsValue::from_str("Template not loaded"))?;
+    pub fn render(&self, data: JsValue) -> Result<Vec<u8>, JsValue> {
+        let renderer = self.renderer.as_ref().ok_or_else(|| {
+            JsValue::from_str(
+                "Template or PDF not loaded. Call fromJson() and loadBasePdf() first.",
+            )
+        })?;
 
-        let pdf_bytes = self
-            .pdf_bytes
-            .as_ref()
-            .ok_or_else(|| JsValue::from_str("Base PDF not loaded"))?;
-
-        // Parse data from JavaScript object
         let data_value: serde_json::Value = serde_wasm_bindgen::from_value(data)?;
 
-        // Open PDF document
-        let mut doc = pdf_core::PdfDocument::open_from_bytes(pdf_bytes)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
-
-        // Add fonts
-        for (name, font_data) in &self.fonts {
-            doc.add_font(name, font_data)
-                .map_err(|e| JsValue::from_str(&e.to_string()))?;
-        }
-
-        // Create renderer
-        let mut renderer = template::TemplateRenderer::new(template);
-
-        // Add wordcut if provided
-        if let Some(wc) = &wordcut {
-            renderer = renderer.with_wordcut(&wc.inner);
-        }
-
-        // Render
         renderer
-            .render(&mut doc, &data_value)
-            .map_err(|e| JsValue::from_str(&e.to_string()))?;
-
-        // Get output bytes
-        doc.to_bytes()
+            .render(&data_value)
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 }

@@ -1,0 +1,6 @@
+{
+  "name": "BOJ45 Tax Withholding Certificate (ใบรับรองการหักภาษี ณ ที่จ่าย)",
+  "description": "Thai tax withholding certificate form with duplicate copy",
+  "template": "/assets/boj45_template.json",
+  "sampleData": "/input/boj45_input.json"
+}
