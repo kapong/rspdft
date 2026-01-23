@@ -1,0 +1,16 @@
+{
+  "name": "BOJ45 Tax Withholding Certificate (ใบรับรองการหักภาษี ณ ที่จ่าย)",
+  "description": "Thai tax withholding certificate form with duplicate copy",
+  "resources": {
+    "template": "/assets/boj45_template.json",
+    "pdf": "/assets/boj45.pdf",
+    "fonts": [
+      { "id": "sarabun", "style": "regular", "url": "/fonts/THSarabunNew.ttf" },
+      { "id": "sarabun", "style": "bold", "url": "/fonts/THSarabunNew Bold.ttf" },
+      { "id": "sarabun", "style": "italic", "url": "/fonts/THSarabunNew Italic.ttf" },
+      { "id": "sarabun", "style": "bold-italic", "url": "/fonts/THSarabunNew BoldItalic.ttf" },
+      { "id": "symbols", "style": "regular", "url": "/fonts/NotoSansSymbols2-Regular.ttf" }
+    ],
+    "sampleData": "/input/boj45_input.json"
+  }
+}

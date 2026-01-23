@@ -1,358 +1,193 @@
-// Import from the wasm package
-import init, { PdfTemplate, ThaiWordcut, ThaiFormatter } from './pkg/rspdft_wasm.js';
+// BOJ45 Tax Form Demo - URL-based resource loading
+import init, { PdfTemplate, ThaiWordcut } from './pkg/rspdft_wasm.js';
 
-// Global state
-let wasmReady = false;
-let wordcut = null;
+// State
 let template = null;
-let loadedFonts = [];
+let wordcut = null;
+let sampleData = null;
 
 // DOM Elements
-const elements = {
-    templateJson: document.getElementById('templateJson'),
-    basePdf: document.getElementById('basePdf'),
-    fontFile: document.getElementById('fontFile'),
-    fontName: document.getElementById('fontName'),
-    addFont: document.getElementById('addFont'),
-    fontsList: document.getElementById('fontsList'),
+const els = {
+    formName: document.getElementById('formName'),
+    resTemplate: document.getElementById('res-template'),
+    resPdf: document.getElementById('res-pdf'),
+    resFonts: document.getElementById('res-fonts'),
     dataJson: document.getElementById('dataJson'),
-    loadSampleTemplate: document.getElementById('loadSampleTemplate'),
-    loadSampleData: document.getElementById('loadSampleData'),
     renderPdf: document.getElementById('renderPdf'),
-    renderBatch: document.getElementById('renderBatch'),
-    status: document.getElementById('status'),
+    resetData: document.getElementById('resetData'),
     error: document.getElementById('error'),
     downloads: document.getElementById('downloads')
 };
 
-// Initialize WASM
-async function initWasm() {
+// Update resource status UI
+function updateResourceStatus(element, status, message) {
+    element.className = `resource-item ${status}`;
+    const icon = element.querySelector('.icon');
+    const statusText = element.querySelector('.status');
+
+    switch (status) {
+        case 'loading':
+            icon.textContent = '⏳';
+            break;
+        case 'success':
+            icon.textContent = '✅';
+            break;
+        case 'error':
+            icon.textContent = '❌';
+            break;
+    }
+    statusText.textContent = message;
+}
+
+// Show error
+function showError(message) {
+    els.error.textContent = message;
+    els.error.classList.remove('hidden');
+    console.error(message);
+}
+
+// Clear error
+function clearError() {
+    els.error.textContent = '';
+    els.error.classList.add('hidden');
+}
+
+// Format bytes
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+}
+
+// Fetch with error handling
+async function fetchResource(url, type = 'arrayBuffer') {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch ${url}: ${response.status}`);
+    }
+    return type === 'json' ? response.json() :
+           type === 'text' ? response.text() :
+           response.arrayBuffer();
+}
+
+// Initialize everything
+async function initialize() {
     try {
+        // 1. Initialize WASM
         await init();
         wordcut = ThaiWordcut.embedded();
-        wasmReady = true;
-        updateStatus('WASM initialized with embedded Thai dictionary', 'success');
-        checkReadyState();
-    } catch (error) {
-        showError('Failed to initialize WASM: ' + error.message);
-        console.error('WASM init error:', error);
-    }
-}
+        console.log('WASM initialized');
 
-// Update status message
-function updateStatus(message, type = 'info') {
-    const statusItem = document.createElement('div');
-    statusItem.className = `status-item ${type}`;
-    statusItem.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-    elements.status.appendChild(statusItem);
-    elements.status.scrollTop = elements.status.scrollHeight;
-}
+        // 2. Load config
+        const config = await fetchResource('config.json', 'json');
+        els.formName.textContent = config.name;
+        console.log('Config loaded:', config);
 
-// Show error message
-function showError(message) {
-    elements.error.textContent = message;
-    elements.error.classList.remove('hidden');
-    updateStatus(message, 'error');
-}
+        // 3. Load template JSON
+        updateResourceStatus(els.resTemplate, 'loading', 'Fetching...');
+        const templateJson = await fetchResource(config.resources.template, 'text');
+        template = PdfTemplate.from_json(templateJson);
+        updateResourceStatus(els.resTemplate, 'success', 'Loaded');
+        console.log('Template loaded');
 
-// Clear error message
-function clearError() {
-    elements.error.textContent = '';
-    elements.error.classList.add('hidden');
-}
-
-// Check if all required resources are loaded
-function checkReadyState() {
-    const hasTemplate = template !== null;
-    const hasFonts = loadedFonts.length > 0;
-    const hasData = elements.dataJson.value.trim() !== '';
-
-    elements.renderPdf.disabled = !(wasmReady && hasTemplate && hasFonts && hasData);
-    elements.renderBatch.disabled = !(wasmReady && hasTemplate && hasFonts && hasData);
-
-    if (hasTemplate && hasFonts && hasData) {
-        updateStatus('Ready to render PDF', 'success');
-    }
-}
-
-// Read file as ArrayBuffer
-function readFileAsArrayBuffer(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => reject(new Error('Failed to read file'));
-        reader.readAsArrayBuffer(file);
-    });
-}
-
-// Read file as text
-function readFileAsText(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => reject(new Error('Failed to read file'));
-        reader.readAsText(file);
-    });
-}
-
-// Load template JSON
-async function loadTemplateJson(jsonText) {
-    try {
-        clearError();
-        template = PdfTemplate.from_json(jsonText);
-        updateStatus('Template loaded successfully', 'success');
-        checkReadyState();
-    } catch (error) {
-        showError('Failed to load template: ' + error.message);
-        console.error('Template load error:', error);
-    }
-}
-
-// Load base PDF
-async function loadBasePdf(bytes) {
-    try {
-        clearError();
-        if (!template) {
-            showError('Please load template JSON first');
-            return;
-        }
-        template.loadBasePdf(new Uint8Array(bytes));
+        // 4. Load base PDF
+        updateResourceStatus(els.resPdf, 'loading', 'Fetching...');
+        const pdfBytes = await fetchResource(config.resources.pdf);
+        template.loadBasePdf(new Uint8Array(pdfBytes));
         template.setWordcut(wordcut);
-        updateStatus('Base PDF loaded successfully', 'success');
-        checkReadyState();
-    } catch (error) {
-        showError('Failed to load PDF: ' + error.message);
-        console.error('PDF load error:', error);
-    }
-}
+        updateResourceStatus(els.resPdf, 'success', formatBytes(pdfBytes.byteLength));
+        console.log('PDF loaded');
 
-// Load font
-async function loadFont(name, bytes) {
-    try {
-        clearError();
-        if (!template) {
-            showError('Please load template JSON first');
-            return;
+        // 5. Load fonts
+        updateResourceStatus(els.resFonts, 'loading', `0/${config.resources.fonts.length}`);
+        let loadedFonts = 0;
+        for (const font of config.resources.fonts) {
+            const fontBytes = await fetchResource(font.url);
+            // Use font id + style as the font name for loading
+            const fontKey = font.style === 'regular' ? font.id : `${font.id}-${font.style}`;
+            template.loadFont(fontKey, new Uint8Array(fontBytes));
+            loadedFonts++;
+            updateResourceStatus(els.resFonts, 'loading', `${loadedFonts}/${config.resources.fonts.length}`);
+            console.log(`Font loaded: ${fontKey}`);
         }
-        template.loadFont(name, new Uint8Array(bytes));
-        loadedFonts.push({ name, size: bytes.length });
-        updateFontsList();
-        updateStatus(`Font "${name}" loaded (${formatBytes(bytes.length)})`, 'success');
-        checkReadyState();
+        updateResourceStatus(els.resFonts, 'success', `${loadedFonts} fonts`);
+
+        // 6. Load sample data
+        sampleData = await fetchResource(config.resources.sampleData, 'text');
+        els.dataJson.value = sampleData;
+        console.log('Sample data loaded');
+
+        // 7. Ready!
+        els.renderPdf.disabled = false;
+        console.log('Ready to render');
+
     } catch (error) {
-        showError('Failed to load font: ' + error.message);
-        console.error('Font load error:', error);
+        showError('Initialization failed: ' + error.message);
+        console.error('Init error:', error);
     }
-}
-
-// Update fonts list UI
-function updateFontsList() {
-    if (loadedFonts.length === 0) {
-        elements.fontsList.innerHTML = '<li class="empty">No fonts loaded</li>';
-        return;
-    }
-
-    elements.fontsList.innerHTML = loadedFonts.map(font => `
-        <li>
-            <span class="font-name">${font.name}</span>
-            <span class="font-size">${formatBytes(font.size)}</span>
-        </li>
-    `).join('');
-}
-
-// Format bytes to human readable
-function formatBytes(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
 // Render PDF
-function renderPdf(data) {
+function handleRender() {
     try {
         clearError();
+        els.renderPdf.disabled = true;
+        els.renderPdf.querySelector('.btn-text').textContent = 'Rendering...';
+
+        const data = JSON.parse(els.dataJson.value);
         const pdfBytes = template.render(data);
-        return pdfBytes;
-    } catch (error) {
-        showError('Failed to render PDF: ' + error.message);
-        console.error('Render error:', error);
-        throw error;
-    }
-}
 
-// Download PDF
-function downloadPdf(bytes, filename) {
-    const blob = new Blob([bytes], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-}
-
-// Add download link to UI
-function addDownloadLink(bytes, filename) {
-    const blob = new Blob([bytes], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-
-    // Remove empty message if present
-    const emptyMsg = elements.downloads.querySelector('.empty');
-    if (emptyMsg) {
-        emptyMsg.remove();
-    }
-
-    const link = document.createElement('a');
-    link.className = 'download-link';
-    link.href = url;
-    link.download = filename;
-    link.innerHTML = `
-        <span class="icon">📄</span>
-        <span class="filename">${filename}</span>
-        <span class="size">${formatBytes(bytes.length)}</span>
-    `;
-    elements.downloads.appendChild(link);
-}
-
-// Load sample template
-async function loadSampleTemplate() {
-    try {
-        const response = await fetch('sample/template.json');
-        const json = await response.text();
-        elements.dataJson.value = json;
-        await loadTemplateJson(json);
-        updateStatus('Sample template loaded', 'success');
-    } catch (error) {
-        showError('Failed to load sample template: ' + error.message);
-    }
-}
-
-// Load sample data
-async function loadSampleData() {
-    try {
-        const response = await fetch('sample/data.json');
-        const json = await response.text();
-        elements.dataJson.value = json;
-        updateStatus('Sample data loaded', 'success');
-        checkReadyState();
-    } catch (error) {
-        showError('Failed to load sample data: ' + error.message);
-    }
-}
-
-// Event Listeners
-elements.templateJson.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    try {
-        const json = await readFileAsText(file);
-        await loadTemplateJson(json);
-    } catch (error) {
-        showError('Failed to read template file: ' + error.message);
-    }
-});
-
-elements.basePdf.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    try {
-        const bytes = await readFileAsArrayBuffer(file);
-        await loadBasePdf(bytes);
-    } catch (error) {
-        showError('Failed to read PDF file: ' + error.message);
-    }
-});
-
-elements.addFont.addEventListener('click', async () => {
-    const file = elements.fontFile.files[0];
-    const name = elements.fontName.value.trim();
-
-    if (!file) {
-        showError('Please select a font file');
-        return;
-    }
-
-    if (!name) {
-        showError('Please enter a font name');
-        return;
-    }
-
-    try {
-        const bytes = await readFileAsArrayBuffer(file);
-        await loadFont(name, bytes);
-        // Clear inputs
-        elements.fontFile.value = '';
-        elements.fontName.value = '';
-    } catch (error) {
-        showError('Failed to read font file: ' + error.message);
-    }
-});
-
-elements.loadSampleTemplate.addEventListener('click', loadSampleTemplate);
-elements.loadSampleData.addEventListener('click', loadSampleData);
-
-elements.dataJson.addEventListener('input', checkReadyState);
-
-elements.renderPdf.addEventListener('click', async () => {
-    try {
-        elements.renderPdf.disabled = true;
-        elements.renderPdf.textContent = 'Rendering...';
-
-        const data = JSON.parse(elements.dataJson.value);
-        const pdfBytes = renderPdf(data);
-
+        // Create download
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
         const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
-        const filename = `output_${timestamp}.pdf`;
+        const filename = `boj45_${timestamp}.pdf`;
 
-        downloadPdf(pdfBytes, filename);
-        addDownloadLink(pdfBytes, filename);
-        updateStatus('PDF rendered successfully', 'success');
+        // Auto-download
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+
+        // Add to downloads list
+        const emptyMsg = els.downloads.querySelector('.empty');
+        if (emptyMsg) emptyMsg.remove();
+
+        const link = document.createElement('a');
+        link.className = 'download-link';
+        link.href = url;
+        link.download = filename;
+        link.innerHTML = `
+            <span class="icon">📄</span>
+            <span class="filename">${filename}</span>
+            <span class="size">${formatBytes(pdfBytes.length)}</span>
+        `;
+        els.downloads.appendChild(link);
+
+        console.log('PDF rendered:', filename);
+
     } catch (error) {
-        // Error already handled in renderPdf
+        showError('Render failed: ' + error.message);
+        console.error('Render error:', error);
     } finally {
-        elements.renderPdf.disabled = false;
-        elements.renderPdf.textContent = 'Render PDF';
-        checkReadyState();
+        els.renderPdf.disabled = false;
+        els.renderPdf.querySelector('.btn-text').textContent = 'Render PDF';
     }
-});
+}
 
-elements.renderBatch.addEventListener('click', async () => {
-    try {
-        elements.renderBatch.disabled = true;
-        elements.renderBatch.textContent = 'Rendering...';
-
-        const baseData = JSON.parse(elements.dataJson.value);
-
-        // Generate 3 variations
-        const variations = [
-            { ...baseData, _variation: 'original' },
-            { ...baseData, customer: { ...baseData.customer, name: 'บริษัท ตัวอย่าง จำกัด' }, _variation: 'variation1' },
-            { ...baseData, amount: baseData.amount * 2, _variation: 'variation2' }
-        ];
-
-        for (let i = 0; i < variations.length; i++) {
-            const pdfBytes = renderPdf(variations[i]);
-            const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
-            const filename = `batch_${i + 1}_${timestamp}.pdf`;
-
-            downloadPdf(pdfBytes, filename);
-            addDownloadLink(pdfBytes, filename);
-            updateStatus(`Batch ${i + 1}/3 rendered`, 'success');
-        }
-
-        updateStatus('Batch rendering complete (3 PDFs)', 'success');
-    } catch (error) {
-        // Error already handled in renderPdf
-    } finally {
-        elements.renderBatch.disabled = false;
-        elements.renderBatch.textContent = 'Render Batch (3 variations)';
-        checkReadyState();
+// Reset data to sample
+function handleReset() {
+    if (sampleData) {
+        els.dataJson.value = sampleData;
+        clearError();
     }
-});
+}
 
-// Initialize on load
-initWasm();
+// Event listeners
+els.renderPdf.addEventListener('click', handleRender);
+els.resetData.addEventListener('click', handleReset);
+
+// Start initialization
+initialize();
