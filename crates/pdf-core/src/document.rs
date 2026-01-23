@@ -443,6 +443,11 @@ impl PdfDocument {
             return Err(PdfError::InvalidPage(page, page_count));
         }
 
+        // Skip empty text - nothing to render
+        if text.is_empty() {
+            return Ok(());
+        }
+
         // Get the current font family name
         let family_name = self
             .current_family

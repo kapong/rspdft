@@ -1,7 +1,7 @@
 # 001: Batch Processing & WASM Examples
 
 **Branch**: `feature/001-batch-wasm`
-**Status**: completed
+**Status**: done
 
 ## Objective
 
