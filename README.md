@@ -1,0 +1,187 @@
+# rspdft
+
+A cross-platform PDF template filling library in Rust, with WebAssembly support.
+
+## Features
+
+- Open existing PDF templates and inject content
+- Text insertion with Thai language support (word segmentation, line breaking)
+- Image insertion (JPEG, PNG)
+- QR code generation and insertion
+- Field form support (character-by-character spacing)
+- Table rendering
+- Thai number and date formatting
+- **Embedded Thai dictionary** - no external files needed
+- Compiles to native binary and WebAssembly
+
+## Installation
+
+### Rust
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+rspdft = "0.1"
+```
+
+### JavaScript (npm)
+
+```bash
+npm install @rspdft/wasm
+```
+
+## Quick Start
+
+### Rust
+
+```rust
+use thai_text::ThaiWordcut;
+use serde_json::json;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Use embedded Thai dictionary (recommended - no external file needed)
+    let wordcut = ThaiWordcut::embedded()?;
+    
+    // Or load from custom file if needed:
+    // let wordcut = ThaiWordcut::from_file("custom-dict.txt")?;
+    
+    // Segment Thai text
+    let words = wordcut.segment("สวัสดีครับ");
+    println!("{:?}", words); // ["สวัสดี", "ครับ"]
+    
+    // Word wrap
+    let lines = wordcut.word_wrap("ข้อความยาวๆ ที่ต้องการตัดบรรทัด", 20);
+    
+    Ok(())
+}
+```
+
+### JavaScript (Browser)
+
+```javascript
+import init, { PdfTemplate, ThaiWordcut } from '@rspdft/wasm';
+
+async function generatePdf() {
+    // Initialize WASM module
+    await init();
+    
+    // Use embedded dictionary (no fetch needed)
+    const wordcut = ThaiWordcut.embedded();
+    
+    // Load template
+    const templateResponse = await fetch('/template.json');
+    const templateJson = await templateResponse.text();
+    const template = PdfTemplate.fromJson(templateJson);
+    
+    // Load base PDF
+    const pdfResponse = await fetch('/base-template.pdf');
+    const pdfBytes = new Uint8Array(await pdfResponse.arrayBuffer());
+    template.loadBasePdf(pdfBytes);
+    
+    // Load font
+    const fontResponse = await fetch('/fonts/THSarabunNew.ttf');
+    const fontBytes = new Uint8Array(await fontResponse.arrayBuffer());
+    template.loadFont('sarabun', fontBytes);
+    
+    // Render with data
+    const data = {
+        customer: { name: "บริษัท ตัวอย่าง จำกัด" },
+        amount: 40000.50
+    };
+    const outputPdf = template.render(data, wordcut);
+    
+    // Download
+    const blob = new Blob([outputPdf], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'output.pdf';
+    a.click();
+}
+```
+
+### Node.js
+
+```javascript
+const fs = require('fs');
+const { PdfTemplate, ThaiWordcut } = require('@rspdft/wasm');
+
+async function main() {
+    // Use embedded dictionary
+    const wordcut = ThaiWordcut.embedded();
+    
+    const templateJson = fs.readFileSync('template.json', 'utf-8');
+    const template = PdfTemplate.fromJson(templateJson);
+    
+    const pdfBytes = fs.readFileSync('base-template.pdf');
+    template.loadBasePdf(new Uint8Array(pdfBytes));
+    
+    const fontBytes = fs.readFileSync('fonts/THSarabunNew.ttf');
+    template.loadFont('sarabun', new Uint8Array(fontBytes));
+    
+    const data = { customer: { name: "Test" }, amount: 100 };
+    const output = template.render(data, wordcut);
+    
+    fs.writeFileSync('output.pdf', Buffer.from(output));
+}
+
+main();
+```
+
+## Building
+
+### Native
+
+```bash
+cargo build --release
+```
+
+### WASM
+
+```bash
+cd crates/wasm
+wasm-pack build --target web      # For browsers
+wasm-pack build --target nodejs   # For Node.js
+```
+
+## Project Structure
+
+```
+crates/
+├── pdf-core/     # Low-level PDF manipulation
+├── thai-text/    # Thai language processing (with embedded dictionary)
+├── template/     # Template parsing and rendering (with embedded schema)
+└── wasm/         # WebAssembly bindings
+```
+
+## Template Format
+
+The template schema is embedded in the library and can be accessed via `template::TEMPLATE_SCHEMA`.
+
+### Block Types
+
+- **text**: Simple text at a position
+- **fieldform**: Character-by-character with custom spacing (e.g., tax ID boxes)
+- **table**: Multi-row data tables
+- **qrcode**: QR code images
+
+### Data Binding
+
+Use JSONPath-like syntax:
+- `$.customer.name` - Object property
+- `$.items[0].price` - Array element
+
+## Thai Language Support
+
+This library includes full Thai language support with an **embedded dictionary** (~40,000 words from Chulalongkorn University TNC 2017):
+
+- **Word Segmentation**: Uses dictionary-based longest matching
+- **Line Breaking**: Thai-aware word wrapping
+- **Number Formatting**: Thai numerals (หนึ่ง, สอง, สาม...)
+- **Currency**: Thai baht text (สามหมื่นบาทถ้วน)
+- **Dates**: Thai Buddhist calendar (25 ม.ค. 68)
+
+## License
+
+MIT

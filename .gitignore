@@ -1,0 +1,61 @@
+# Rust
+/target
+
+# Scaffold (IDE temp)
+/scaffold/
+
+# WASM build output
+/pkg
+/wasm-pack.log
+*.wasm
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated PDF outputs
+output/
+
+# Environment and secrets
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+
+# Coverage
+*.profraw
+*.profdata
+lcov.info
+coverage/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Sensitive/Private data directories
+/input/old/
+/legacy_assets/
+
+# Python virtual environments
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Node modules (if any)
+node_modules/
+
+# Log files
+*.log
+
+Cargo.lock

@@ -1,0 +1,30 @@
+[package]
+name = "pdf-core"
+description = "Low-level PDF manipulation for rspdft"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+lopdf = { workspace = true }
+image = { workspace = true }
+ab_glyph = { workspace = true }
+ttf-parser = { workspace = true }
+thiserror = { workspace = true }
+flate2 = "1.0"
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+image = { workspace = true }
+qrcode = { workspace = true }
+thai-text = { path = "../thai-text" }
+template = { path = "../template" }
+serde_json = { workspace = true }
+
+[[example]]
+name = "full_demo"
+path = "../../examples/full_demo.rs"
+
+[[example]]
+name = "boj45"
+path = "../../examples/boj45.rs"

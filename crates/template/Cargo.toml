@@ -1,0 +1,19 @@
+[package]
+name = "template"
+description = "Template engine for rspdft"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+pdf-core = { path = "../pdf-core" }
+thai-text = { path = "../thai-text" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+qrcode = { workspace = true }
+image = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+lopdf = { workspace = true }
