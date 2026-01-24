@@ -282,6 +282,73 @@ impl PdfTemplate {
             .render(&data_value)
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
+
+    /// Set font for subsequent text insertions
+    ///
+    /// @param fontId - Font identifier (must be loaded via loadFont)
+    /// @param size - Font size in points (1-255)
+    #[wasm_bindgen(js_name = setFont)]
+    pub fn set_font(&mut self, font_id: &str, size: u8) -> Result<(), JsValue> {
+        let renderer = self.renderer.as_mut().ok_or_else(|| {
+            JsValue::from_str("Template not loaded. Call fromJson() and loadBasePdf() first.")
+        })?;
+        renderer.template_mut().set_font(font_id, size);
+        Ok(())
+    }
+
+    /// Set font style for subsequent text insertions
+    ///
+    /// @param style - Style: "regular", "bold", "italic", "bold-italic"
+    #[wasm_bindgen(js_name = setFontStyle)]
+    pub fn set_font_style(&mut self, style: &str) -> Result<(), JsValue> {
+        let renderer = self
+            .renderer
+            .as_mut()
+            .ok_or_else(|| JsValue::from_str("Template not loaded."))?;
+        let style_enum = match style {
+            "bold" => template::FontStyle::Bold,
+            "italic" => template::FontStyle::Italic,
+            "bold-italic" => template::FontStyle::BoldItalic,
+            _ => template::FontStyle::Regular,
+        };
+        renderer.template_mut().set_font_style(style_enum);
+        Ok(())
+    }
+
+    /// Insert text at a specific position
+    ///
+    /// Useful for adding labels that should only appear on specific pages
+    /// or positions (e.g., "(COPY)" label on duplicate side of form).
+    ///
+    /// @param text - Text to insert
+    /// @param page - Page number (1-indexed)
+    /// @param x - X position in points
+    /// @param y - Y position in points
+    /// @param align - Alignment: "left", "center", "right"
+    #[wasm_bindgen(js_name = insertText)]
+    pub fn insert_text(
+        &mut self,
+        text: &str,
+        page: usize,
+        x: f64,
+        y: f64,
+        align: &str,
+    ) -> Result<(), JsValue> {
+        let renderer = self.renderer.as_mut().ok_or_else(|| {
+            JsValue::from_str("Template not loaded. Call fromJson() and loadBasePdf() first.")
+        })?;
+
+        let align_enum = match align {
+            "right" => template::Align::Right,
+            "center" => template::Align::Center,
+            _ => template::Align::Left,
+        };
+
+        renderer
+            .template_mut()
+            .insert_text(text, page, x, y, align_enum);
+        Ok(())
+    }
 }
 
 impl Default for PdfTemplate {
