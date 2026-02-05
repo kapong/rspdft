@@ -452,7 +452,8 @@ impl WasmPdfDocument {
     /// @param b - Blue component (0-255)
     #[wasm_bindgen(js_name = setTextColor)]
     pub fn set_text_color(&mut self, r: u8, g: u8, b: u8) {
-        self.inner.set_text_color(pdf_core::Color::from_rgb(r, g, b));
+        self.inner
+            .set_text_color(pdf_core::Color::from_rgb(r, g, b));
     }
 
     /// Insert text at a specific position
