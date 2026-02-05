@@ -283,7 +283,31 @@ impl PdfTemplate {
             .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
-    /// Set font for subsequent text insertions
+    /// Render PDF with data, returning a document for further modification
+    ///
+    /// Use this when you need to add page-specific content after rendering,
+    /// such as a "(COPY)" label only on page 2.
+    ///
+    /// @param data - Data object for binding
+    /// @returns WasmPdfDocument instance for further modification
+    #[wasm_bindgen(js_name = renderToDocument)]
+    pub fn render_to_document(&self, data: JsValue) -> Result<WasmPdfDocument, JsValue> {
+        let renderer = self.renderer.as_ref().ok_or_else(|| {
+            JsValue::from_str(
+                "Template or PDF not loaded. Call fromJson() and loadBasePdf() first.",
+            )
+        })?;
+
+        let data_value: serde_json::Value = serde_wasm_bindgen::from_value(data)?;
+
+        let doc = renderer
+            .render_to_document(&data_value)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+        Ok(WasmPdfDocument { inner: doc })
+    }
+
+    /// Set font for subsequent text insertions (pre-render template modification)
     ///
     /// @param fontId - Font identifier (must be loaded via loadFont)
     /// @param size - Font size in points (1-255)
@@ -354,6 +378,126 @@ impl PdfTemplate {
 impl Default for PdfTemplate {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// PDF Document for post-render modifications
+///
+/// Returned by `PdfTemplate.renderToDocument()`. Use this to make
+/// page-specific modifications after rendering, such as adding
+/// a "(COPY)" label only on page 2.
+///
+/// # Example (JavaScript)
+/// ```javascript
+/// const doc = template.renderToDocument(data);
+/// doc.setFont("sarabun", 10);
+/// doc.setFontWeight("bold");
+/// doc.setTextColor(255, 0, 0); // Red
+/// doc.insertText("(COPY)", 2, 550, 15, "right");
+/// const pdfBytes = doc.toBytes();
+/// ```
+#[wasm_bindgen]
+pub struct WasmPdfDocument {
+    inner: pdf_core::PdfDocument,
+}
+
+#[wasm_bindgen]
+impl WasmPdfDocument {
+    /// Set font for subsequent text insertions
+    ///
+    /// @param fontId - Font identifier (e.g., "sarabun")
+    /// @param size - Font size in points
+    #[wasm_bindgen(js_name = setFont)]
+    pub fn set_font(&mut self, font_id: &str, size: f32) -> Result<(), JsValue> {
+        self.inner
+            .set_font(font_id, size)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        Ok(())
+    }
+
+    /// Set font weight
+    ///
+    /// @param weight - "regular" or "bold"
+    #[wasm_bindgen(js_name = setFontWeight)]
+    pub fn set_font_weight(&mut self, weight: &str) -> Result<(), JsValue> {
+        let weight_enum = match weight {
+            "bold" => pdf_core::FontWeight::Bold,
+            _ => pdf_core::FontWeight::Regular,
+        };
+        self.inner
+            .set_font_weight(weight_enum)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        Ok(())
+    }
+
+    /// Set font style
+    ///
+    /// @param style - "normal" or "italic"
+    #[wasm_bindgen(js_name = setFontStyle)]
+    pub fn set_font_style(&mut self, style: &str) -> Result<(), JsValue> {
+        let style_enum = match style {
+            "italic" => pdf_core::FontStyle::Italic,
+            _ => pdf_core::FontStyle::Normal,
+        };
+        self.inner
+            .set_font_style(style_enum)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+        Ok(())
+    }
+
+    /// Set text color (RGB values 0-255)
+    ///
+    /// @param r - Red component (0-255)
+    /// @param g - Green component (0-255)
+    /// @param b - Blue component (0-255)
+    #[wasm_bindgen(js_name = setTextColor)]
+    pub fn set_text_color(&mut self, r: u8, g: u8, b: u8) {
+        self.inner.set_text_color(pdf_core::Color::from_rgb(r, g, b));
+    }
+
+    /// Insert text at a specific position
+    ///
+    /// @param text - Text to insert
+    /// @param page - Page number (1-indexed)
+    /// @param x - X position in points
+    /// @param y - Y position in points (from top)
+    /// @param align - Alignment: "left", "center", "right"
+    #[wasm_bindgen(js_name = insertText)]
+    pub fn insert_text(
+        &mut self,
+        text: &str,
+        page: usize,
+        x: f64,
+        y: f64,
+        align: &str,
+    ) -> Result<(), JsValue> {
+        let align_enum = match align {
+            "right" => pdf_core::Align::Right,
+            "center" => pdf_core::Align::Center,
+            _ => pdf_core::Align::Left,
+        };
+
+        self.inner
+            .insert_text(text, page, x, y, align_enum)
+            .map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    /// Get page count
+    ///
+    /// @returns Number of pages in the document
+    #[wasm_bindgen(js_name = pageCount)]
+    pub fn page_count(&self) -> usize {
+        self.inner.page_count()
+    }
+
+    /// Convert document to PDF bytes
+    ///
+    /// @returns PDF bytes (Uint8Array)
+    #[wasm_bindgen(js_name = toBytes)]
+    pub fn to_bytes(&mut self) -> Result<Vec<u8>, JsValue> {
+        self.inner
+            .to_bytes()
+            .map_err(|e| JsValue::from_str(&e.to_string()))
     }
 }
 
