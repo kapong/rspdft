@@ -91,9 +91,16 @@ This section provides essential context for AI agents working with this codebase
 **Rust (Native)**:
 ```rust
 // TemplateRenderer: load once, render many
-let mut renderer = TemplateRenderer::new(&json, pdf_bytes, Some(Path::new(".")))?;
-renderer.set_wordcut(ThaiWordcut::embedded()?);
-let output = renderer.render(&data)?;  // Each call is independent
+let renderer = TemplateRenderer::new(&json, pdf_bytes, Some(Path::new(".")))?;
+let output = renderer.render(&data)?;  // Returns PDF bytes directly
+
+// Or render to document for post-render modifications
+let mut doc = renderer.render_to_document(&data)?;
+doc.set_font("sarabun", 10.0)?
+    .set_font_weight(PdfFontWeight::Bold)?
+    .set_text_color(PdfColor::red())
+    .insert_text("(COPY)", 2, 550.0, 15.0, PdfAlign::Right)?;
+let output = doc.to_bytes()?;
 ```
 
 **JavaScript (WASM)**:
@@ -103,7 +110,15 @@ const template = PdfTemplate.fromJson(json);
 template.loadBasePdf(pdfBytes);
 template.loadFont('sarabun', fontBytes);
 template.setWordcut(ThaiWordcut.embedded());
-const output = template.render(data);  // Each call is independent
+const output = template.render(data);  // Returns PDF bytes directly
+
+// Or render to document for post-render modifications
+const doc = template.renderToDocument(data);
+doc.setFont('sarabun', 10);
+doc.setFontWeight('bold');
+doc.setTextColor(255, 0, 0);  // Red
+doc.insertText('(COPY)', 2, 550, 15, 'right');
+const output = doc.toBytes();
 ```
 
 ### Data Binding
@@ -154,23 +169,31 @@ npm install @rspdft/wasm
 ### Rust
 
 ```rust
-use thai_text::ThaiWordcut;
-use serde_json::json;
+use std::path::Path;
+use template::{PdfAlign, PdfColor, PdfFontWeight, TemplateRenderer};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Use embedded Thai dictionary (recommended - no external file needed)
-    let wordcut = ThaiWordcut::embedded()?;
-    
-    // Or load from custom file if needed:
-    // let wordcut = ThaiWordcut::from_file("custom-dict.txt")?;
-    
-    // Segment Thai text
-    let words = wordcut.segment("สวัสดีครับ");
-    println!("{:?}", words); // ["สวัสดี", "ครับ"]
-    
-    // Word wrap
-    let lines = wordcut.word_wrap("ข้อความยาวๆ ที่ต้องการตัดบรรทัด", 20);
-    
+    // Load template and PDF
+    let template_json = std::fs::read_to_string("template.json")?;
+    let pdf_bytes = std::fs::read("base.pdf")?;
+    let renderer = TemplateRenderer::new(&template_json, pdf_bytes, Some(Path::new(".")))?;
+
+    // Data for rendering
+    let data = serde_json::json!({ "name": "บริษัท ตัวอย่าง จำกัด" });
+
+    // Option 1: Simple render (returns PDF bytes)
+    let output = renderer.render(&data)?;
+    std::fs::write("output.pdf", output)?;
+
+    // Option 2: Render to document for post-render modifications
+    let mut doc = renderer.render_to_document(&data)?;
+    doc.set_font("sarabun", 10.0)?
+        .set_font_weight(PdfFontWeight::Bold)?
+        .set_text_color(PdfColor::red())
+        .insert_text("(COPY)", 1, 550.0, 15.0, PdfAlign::Right)?;
+    let output = doc.to_bytes()?;
+    std::fs::write("output_with_label.pdf", output)?;
+
     Ok(())
 }
 ```
@@ -207,7 +230,17 @@ async function generatePdf() {
         customer: { name: "บริษัท ตัวอย่าง จำกัด" },
         amount: 40000.50
     };
+    
+    // Option 1: Simple render (returns PDF bytes)
     const outputPdf = template.render(data);
+    
+    // Option 2: Render to document for post-render modifications
+    const doc = template.renderToDocument(data);
+    doc.setFont('sarabun', 10);
+    doc.setFontWeight('bold');
+    doc.setTextColor(255, 0, 0);  // Red
+    doc.insertText('(COPY)', 1, 550, 15, 'right');
+    const outputPdf = doc.toBytes();
     
     // Download
     const blob = new Blob([outputPdf], { type: 'application/pdf' });
@@ -242,9 +275,19 @@ async function main() {
     template.setWordcut(wordcut);
     
     const data = { customer: { name: "Test" }, amount: 100 };
-    const output = template.render(data);
     
+    // Option 1: Simple render
+    const output = template.render(data);
     writeFileSync('output.pdf', Buffer.from(output));
+    
+    // Option 2: Render to document for post-render modifications
+    const doc = template.renderToDocument(data);
+    doc.setFont('sarabun', 10);
+    doc.setFontWeight('bold');
+    doc.setTextColor(255, 0, 0);  // Red
+    doc.insertText('(COPY)', 1, 550, 15, 'right');
+    const modifiedOutput = doc.toBytes();
+    writeFileSync('output_with_label.pdf', Buffer.from(modifiedOutput));
 }
 
 main();
@@ -255,17 +298,15 @@ main();
 The `TemplateRenderer` supports efficient batch rendering - load resources once, render many times:
 
 ```rust
-use template::TemplateRenderer;
+use std::path::Path;
+use template::{PdfAlign, PdfColor, PdfFontWeight, TemplateRenderer};
 use serde_json::json;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Load once (fonts auto-loaded from template paths)
     let template_json = std::fs::read_to_string("template.json")?;
     let pdf_bytes = std::fs::read("base.pdf")?;
-    let mut renderer = TemplateRenderer::new(&template_json, pdf_bytes, Some(std::path::Path::new(".")))?;
-
-    // Optional: enable Thai word segmentation
-    renderer.set_wordcut(thai_text::ThaiWordcut::embedded()?);
+    let renderer = TemplateRenderer::new(&template_json, pdf_bytes, Some(Path::new(".")))?;
 
     // 2. Render multiple times (each independent, no data mixing)
     let records = vec![
@@ -275,8 +316,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ];
 
     for (i, data) in records.iter().enumerate() {
-        let pdf = renderer.render(data)?;
+        // Simple render
+        let pdf = renderer.render(&data)?;
         std::fs::write(format!("output_{}.pdf", i + 1), pdf)?;
+
+        // Or with post-render modifications
+        let mut doc = renderer.render_to_document(&data)?;
+        doc.set_font("sarabun", 10.0)?
+            .set_font_weight(PdfFontWeight::Bold)?
+            .set_text_color(PdfColor::red())
+            .insert_text("(COPY)", 1, 550.0, 15.0, PdfAlign::Right)?;
+        std::fs::write(format!("output_{}_copy.pdf", i + 1), doc.to_bytes()?)?;
     }
 
     Ok(())
@@ -288,6 +338,49 @@ For manual font loading (e.g., when fonts are not in template paths):
 ```rust
 let mut renderer = TemplateRenderer::new(&template_json, pdf_bytes, None)?;
 renderer.add_font("sarabun", std::fs::read("fonts/THSarabunNew.ttf")?);
+```
+
+## Post-Render Modifications
+
+The `render_to_document()` / `renderToDocument()` API returns a document object that allows modifications after template rendering. This is useful for:
+
+- Adding page-specific labels (e.g., "(COPY)" on duplicate pages)
+- Adding watermarks
+- Dynamic content based on page count
+
+### PdfDocument Methods (Rust)
+
+| Method | Description |
+|--------|-------------|
+| `set_font(id, size)` | Set font for subsequent text (returns `&mut Self`) |
+| `set_font_weight(weight)` | Set weight: `Regular` or `Bold` |
+| `set_font_style(style)` | Set style: `Normal` or `Italic` |
+| `set_text_color(color)` | Set RGB color |
+| `insert_text(text, page, x, y, align)` | Insert text at position |
+| `page_count()` | Get number of pages |
+| `to_bytes()` | Convert to PDF bytes |
+
+### WasmPdfDocument Methods (JavaScript)
+
+| Method | Description |
+|--------|-------------|
+| `setFont(id, size)` | Set font for subsequent text |
+| `setFontWeight(weight)` | `"regular"` or `"bold"` |
+| `setFontStyle(style)` | `"normal"` or `"italic"` |
+| `setTextColor(r, g, b)` | RGB values (0-255) |
+| `insertText(text, page, x, y, align)` | Insert text (`align`: "left", "center", "right") |
+| `pageCount()` | Get number of pages |
+| `toBytes()` | Convert to PDF bytes (Uint8Array) |
+
+### Method Chaining (Rust)
+
+`set_font`, `set_font_weight`, `set_font_style`, and `set_text_color` return `&mut Self` for fluent API:
+
+```rust
+doc.set_font("sarabun", 10.0)?
+    .set_font_weight(PdfFontWeight::Bold)?
+    .set_text_color(PdfColor::red())
+    .insert_text("(COPY)", 1, 550.0, 15.0, PdfAlign::Right)?;
 ```
 
 ## Examples
