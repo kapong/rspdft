@@ -3,7 +3,29 @@
   "template": {
     "source": "./assets/approve_wh3.pdf",
     "duplicate": {
-      "page": 2
+      "page": 2, 
+      "additionalItems": [
+        {
+          "type": "text",
+          "text": "(สำเนา / COPY)",
+          "position": {
+            "x": 565.0,
+            "y": 35.0
+          },
+          "font": {
+            "family": "sarabun",
+            "size": 14,
+            "weight": "regular",
+            "color": {
+              "r": 255,
+              "g": 0,
+              "b": 0
+            }
+          },
+          "align": "right",
+          "page": 2
+        }
+      ]
     }
   },
   "fonts": [

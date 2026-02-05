@@ -1,6 +1,7 @@
 //! BOJ45 Form Generator
 //!
 //! Generates BOJ45 tax form using template and input data.
+//! Demonstrates render_to_document() for adding custom labels.
 //!
 //! Run with: cargo run --example boj45
 
@@ -28,7 +29,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let input_json = std::fs::read_to_string("input/boj45_input.json")?;
     let data: serde_json::Value = serde_json::from_str(&input_json)?;
 
-    // Render to PdfDocument for further modification
+    // Render to PdfDocument for post-render modifications
+    // (This example shows how to add labels not in the template)
     let mut doc = renderer.render_to_document(&data)?;
 
     // Add "(COPY)" label on the right side using method chaining

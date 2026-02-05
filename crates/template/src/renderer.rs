@@ -256,7 +256,73 @@ impl TemplateRenderer {
                     self.render_block(doc, &dup_block, data)?;
                 }
             }
+
+            // Render additional items (e.g., "(COPY)" label)
+            for item in &duplicate.additional_items {
+                self.render_additional_item(doc, item)?;
+            }
         }
+
+        Ok(())
+    }
+
+    /// Render an additional item (from duplicate configuration)
+    fn render_additional_item(
+        &self,
+        doc: &mut PdfDocument,
+        item: &crate::schema::AdditionalItem,
+    ) -> Result<()> {
+        if item.item_type != "text" {
+            return Ok(()); // Only text type supported for now
+        }
+
+        let text = item.text.as_deref().unwrap_or("");
+        if text.is_empty() {
+            return Ok(());
+        }
+
+        let page = item.page.unwrap_or(1);
+
+        // Set font if specified
+        if let Some(font) = &item.font {
+            let font_weight = match font.style {
+                crate::schema::FontStyle::Bold | crate::schema::FontStyle::BoldItalic => {
+                    pdf_core::FontWeight::Bold
+                }
+                _ => pdf_core::FontWeight::Regular,
+            };
+            let font_style = match font.style {
+                crate::schema::FontStyle::Italic | crate::schema::FontStyle::BoldItalic => {
+                    pdf_core::FontStyle::Italic
+                }
+                _ => pdf_core::FontStyle::Normal,
+            };
+
+            doc.set_font(&font.family, font.size as f32)
+                .map_err(|e| TemplateError::RenderError(format!("Font error: {e}")))?;
+            doc.set_font_weight(font_weight)
+                .map_err(|e| TemplateError::RenderError(format!("Font weight error: {e}")))?;
+            doc.set_font_style(font_style)
+                .map_err(|e| TemplateError::RenderError(format!("Font style error: {e}")))?;
+
+            // Set color if specified
+            if let Some(color) = &font.color {
+                // Color values in JSON are 0-255, convert to pdf_core::Color
+                let pdf_color =
+                    pdf_core::Color::from_rgb(color.r as u8, color.g as u8, color.b as u8);
+                doc.set_text_color(pdf_color);
+            }
+        }
+
+        // Convert alignment
+        let align = match item.align {
+            crate::schema::Align::Left => pdf_core::Align::Left,
+            crate::schema::Align::Center => pdf_core::Align::Center,
+            crate::schema::Align::Right => pdf_core::Align::Right,
+        };
+
+        doc.insert_text(text, page, item.position.x, item.position.y, align)
+            .map_err(|e| TemplateError::RenderError(format!("Insert text error: {e}")))?;
 
         Ok(())
     }

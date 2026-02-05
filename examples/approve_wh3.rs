@@ -2,11 +2,12 @@
 //!
 //! Generates Approve WH3 tax withholding form using template and input data.
 //! This template duplicates page 1 to page 2 for original/copy receipts.
+//! The "(COPY)" label is configured in the template's additionalItems.
 //!
 //! Run with: cargo run --example approve_wh3
 
 use std::path::Path;
-use template::{PdfAlign, PdfColor, PdfFontWeight, TemplateRenderer};
+use template::TemplateRenderer;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create output directory
@@ -29,17 +30,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let input_json = std::fs::read_to_string("input/approve_wh3_input.json")?;
     let data: serde_json::Value = serde_json::from_str(&input_json)?;
 
-    // Render to PdfDocument (allows further modification)
-    let mut doc = renderer.render_to_document(&data)?;
+    // Render PDF - additionalItems in template handles the "(COPY)" label
+    let pdf_bytes = renderer.render(&data)?;
 
-    // Add "(COPY)" label ONLY on page 2 using method chaining
-    doc.set_font("sarabun", 14.0)?
-        .set_font_weight(PdfFontWeight::Regular)?
-        .set_text_color(PdfColor::red())
-        .insert_text("(สำเนา / COPY)", 2, 565.0, 35.0, PdfAlign::Right)?;
-
-    // Convert to bytes and save
-    let pdf_bytes = doc.to_bytes()?;
+    // Save output
     let output_path = "output/approve_wh3.pdf";
     std::fs::write(output_path, pdf_bytes)?;
 

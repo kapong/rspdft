@@ -234,6 +234,38 @@ pub struct Duplicate {
     /// Can be combined with x/y offsets.
     #[serde(default)]
     pub page: Option<u32>,
+
+    /// Additional items to render after duplication (e.g., "(COPY)" label)
+    #[serde(rename = "additionalItems")]
+    #[serde(default)]
+    pub additional_items: Vec<AdditionalItem>,
+}
+
+/// Additional item for duplicate configuration (e.g., copy label)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdditionalItem {
+    /// Item type (currently only "text" supported)
+    #[serde(rename = "type")]
+    pub item_type: String,
+
+    /// Static text content
+    #[serde(default)]
+    pub text: Option<String>,
+
+    /// Position
+    pub position: Position,
+
+    /// Font specification
+    #[serde(default)]
+    pub font: Option<Font>,
+
+    /// Text alignment
+    #[serde(default)]
+    pub align: Align,
+
+    /// Target page (1-indexed)
+    #[serde(default)]
+    pub page: Option<usize>,
 }
 
 /// Font family definition (new format with variants)
