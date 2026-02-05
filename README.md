@@ -48,43 +48,56 @@ This section provides essential context for AI agents working with this codebase
 
 ```json
 {
-  "pdf": "path/to/base.pdf",
+  "template": {
+    "source": "path/to/base.pdf",
+    "duplicate": {
+      "page": 2,
+      "additionalItems": [
+        {
+          "type": "text",
+          "text": "(COPY)",
+          "position": { "x": 550, "y": 15 },
+          "font": { "family": "sarabun", "size": 10, "color": { "r": 255, "g": 0, "b": 0 } },
+          "align": "right",
+          "page": 2
+        }
+      ]
+    }
+  },
   "fonts": [
-    { "id": "sarabun", "path": "fonts/THSarabunNew.ttf" },
-    { "id": "sarabun-bold", "path": "fonts/THSarabunNew-Bold.ttf" }
+    { "id": "sarabun", "regular": "fonts/THSarabunNew.ttf", "bold": "fonts/THSarabunNew-Bold.ttf" }
   ],
   "blocks": [
     {
       "type": "text",
-      "x": 100,
-      "y": 200,
-      "page": 1,
-      "font": "sarabun",
-      "fontSize": 14,
-      "binding": "$.customer.name"
+      "position": { "x": 100, "y": 200 },
+      "font": { "family": "sarabun", "size": 14 },
+      "bind": "$.customer.name",
+      "pages": [1]
     },
     {
       "type": "fieldform",
-      "x": 50,
-      "y": 300,
-      "page": 1,
-      "font": "sarabun",
-      "fontSize": 12,
-      "binding": "$.taxId",
-      "spacing": 15,
-      "maxLength": 13
+      "position": { "x": 50, "y": 300 },
+      "font": { "family": "sarabun", "size": 12 },
+      "bind": "$.taxId",
+      "charSpacing": [15, 15, 15],
+      "pages": [1]
     },
     {
       "type": "qrcode",
-      "x": 400,
-      "y": 100,
-      "page": 1,
+      "position": { "x": 400, "y": 100 },
       "size": 80,
-      "binding": "$.qrData"
+      "bind": "$.qrData",
+      "pages": [1]
     }
   ]
 }
 ```
+
+The `duplicate` section allows:
+- **page**: Duplicate all blocks to another page
+- **x/y**: Offset for duplicated blocks
+- **additionalItems**: Extra items (like "(COPY)" labels) rendered after duplication
 
 ### Key API Patterns
 
@@ -143,7 +156,7 @@ All operations return `Result<T, E>`:
 
 ```bash
 cargo test --all        # Run all tests
-cargo run --example boj45  # Run example
+cargo run --example render_form -- assets/approve_wh3.json input/approve_wh3_input.json
 ./scripts/build-wasm.sh    # Build WASM
 ```
 
@@ -385,9 +398,21 @@ doc.set_font("sarabun", 10.0)?
 
 ## Examples
 
+### CLI Form Renderer
+
+```bash
+# Render any form with template and input JSON
+cargo run --example render_form -- <template.json> <input.json> [output.pdf]
+
+# Examples:
+cargo run --example render_form -- assets/approve_wh3.json input/approve_wh3_input.json
+cargo run --example render_form -- assets/boj45_template.json input/boj45_input.json
+```
+
+### Other Examples
+
 - **Browser**: See `examples/web/` for interactive browser demo
 - **Node.js**: See `examples/node/` for CLI batch processing
-- **Rust**: See `examples/boj45.rs` for native Rust usage
 
 ## Building
 
