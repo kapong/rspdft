@@ -219,7 +219,7 @@ pub struct TemplateSource {
 }
 
 /// Duplicate configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Duplicate {
     /// X offset for duplicated blocks
     #[serde(default)]
@@ -228,6 +228,12 @@ pub struct Duplicate {
     /// Y offset for duplicated blocks
     #[serde(default)]
     pub y: f64,
+
+    /// Target page for duplication (duplicates all blocks to this page)
+    /// If set, blocks are duplicated to the specified page number.
+    /// Can be combined with x/y offsets.
+    #[serde(default)]
+    pub page: Option<u32>,
 }
 
 /// Font family definition (new format with variants)
@@ -625,6 +631,17 @@ impl Block {
                 b.position.x += dx;
                 b.position.y += dy;
             }
+        }
+    }
+
+    /// Set the pages for this block
+    pub fn set_pages(&mut self, pages: Vec<usize>) {
+        let pages_opt = Some(pages);
+        match self {
+            Block::Text(b) => b.pages = pages_opt,
+            Block::FieldForm(b) => b.pages = pages_opt,
+            Block::Table(b) => b.pages = pages_opt,
+            Block::QRCode(b) => b.pages = pages_opt,
         }
     }
 }

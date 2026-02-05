@@ -27,6 +27,11 @@ pub use parser::parse_template;
 pub use renderer::TemplateRenderer;
 pub use schema::*;
 
+// Re-export pdf_core types for direct manipulation after render_to_document
+pub use pdf_core::PdfDocument;
+pub use pdf_core::{Align as PdfAlign, Color as PdfColor};
+pub use pdf_core::{FontStyle as PdfFontStyle, FontWeight as PdfFontWeight};
+
 // Re-export the embedded schema
 pub use schema::TEMPLATE_SCHEMA;
 

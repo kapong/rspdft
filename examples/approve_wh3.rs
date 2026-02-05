@@ -1,8 +1,9 @@
-//! BOJ45 Form Generator
+//! Approve WH3 Form Generator
 //!
-//! Generates BOJ45 tax form using template and input data.
+//! Generates Approve WH3 tax withholding form using template and input data.
+//! This template duplicates page 1 to page 2 for original/copy receipts.
 //!
-//! Run with: cargo run --example boj45
+//! Run with: cargo run --example approve_wh3
 
 use std::path::Path;
 use template::{PdfAlign, PdfColor, PdfFontWeight, TemplateRenderer};
@@ -12,7 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all("output")?;
 
     // Load template JSON
-    let template_json = std::fs::read_to_string("assets/boj45_template.json")?;
+    let template_json = std::fs::read_to_string("assets/approve_wh3.json")?;
 
     // Parse template to get the PDF source path
     let temp_template: serde_json::Value = serde_json::from_str(&template_json)?;
@@ -25,21 +26,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = TemplateRenderer::new(&template_json, pdf_bytes, Some(Path::new(".")))?;
 
     // Load input data
-    let input_json = std::fs::read_to_string("input/boj45_input.json")?;
+    let input_json = std::fs::read_to_string("input/approve_wh3_input.json")?;
     let data: serde_json::Value = serde_json::from_str(&input_json)?;
 
-    // Render to PdfDocument for further modification
+    // Render to PdfDocument (allows further modification)
     let mut doc = renderer.render_to_document(&data)?;
 
-    // Add "(COPY)" label on the right side using method chaining
-    doc.set_font("sarabun", 10.0)?
-        .set_font_weight(PdfFontWeight::Bold)?
+    // Add "(COPY)" label ONLY on page 2 using method chaining
+    doc.set_font("sarabun", 14.0)?
+        .set_font_weight(PdfFontWeight::Regular)?
         .set_text_color(PdfColor::red())
-        .insert_text("(สำเนา / COPY)", 1, 820.0, 15.0, PdfAlign::Right)?;
+        .insert_text("(สำเนา / COPY)", 2, 565.0, 35.0, PdfAlign::Right)?;
 
     // Convert to bytes and save
     let pdf_bytes = doc.to_bytes()?;
-    let output_path = "output/boj45.pdf";
+    let output_path = "output/approve_wh3.pdf";
     std::fs::write(output_path, pdf_bytes)?;
 
     println!("Generated: {output_path}");

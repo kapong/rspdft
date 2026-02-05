@@ -1,0 +1,1392 @@
+{
+  "version": "2.0",
+  "template": {
+    "source": "./assets/approve_wh3.pdf",
+    "duplicate": {
+      "page": 2
+    }
+  },
+  "fonts": [
+    {
+      "id": "sarabun",
+      "family": "TH Sarabun New",
+      "regular": "./fonts/THSarabunNew.ttf",
+      "bold": "./fonts/THSarabunNew Bold.ttf",
+      "italic": "./fonts/THSarabunNew Italic.ttf",
+      "boldItalic": "./fonts/THSarabunNew BoldItalic.ttf",
+      "fallback": ["symbols"]
+    },
+    {
+      "id": "symbols",
+      "family": "Noto Sans Symbols 2",
+      "regular": "./fonts/NotoSansSymbols2-Regular.ttf"
+    }
+  ],
+  "blocks": [
+    {
+      "id": "bookid",
+      "type": "text",
+      "bind": "$.bookid",
+      "position": {
+        "x": 517.905,
+        "y": 59.4
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "docid",
+      "type": "text",
+      "bind": "$.docid",
+      "position": {
+        "x": 517.905,
+        "y": 73.543
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "datecreate",
+      "type": "text",
+      "bind": "$.datecreate",
+      "position": {
+        "x": 397.297,
+        "y": 765.129
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "name1",
+      "type": "text",
+      "bind": "$.name1",
+      "position": {
+        "x": 63.851,
+        "y": 108.9
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "address1",
+      "type": "text",
+      "bind": "$.address1",
+      "position": {
+        "x": 63.851,
+        "y": 132.943
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "taxid1",
+      "type": "fieldform",
+      "bind": "$.taxid1",
+      "position": {
+        "x": 381,
+        "y": 93.343
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "charSpacing": [
+        18.25,
+        12.0,
+        12.0,
+        12.0,
+        18.25,
+        12.0,
+        12.0,
+        12.0,
+        12.0,
+        18.25,
+        12.0,
+        19.0
+      ],
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "taxid1_10",
+      "type": "fieldform",
+      "bind": "$.taxid1_10",
+      "position": {
+        "x": 426,
+        "y": 109.607
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "charSpacing": [
+        18.39,
+        12.02,
+        12.3,
+        10.61,
+        18.39,
+        12.02,
+        12.45,
+        12.02,
+        17.68,
+        18.39,
+        12.02,
+        19.09
+      ],
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "name2",
+      "type": "text",
+      "bind": "$.name2",
+      "position": {
+        "x": 63.851,
+        "y": 182.443
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "address2",
+      "type": "text",
+      "bind": "$.address2",
+      "position": {
+        "x": 63.851,
+        "y": 207.9
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "taxid2",
+      "type": "fieldform",
+      "bind": "$.taxid2",
+      "position": {
+        "x": 381,
+        "y": 161.936
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "charSpacing": [
+        18.25,
+        12.0,
+        12.0,
+        12.0,
+        18.25,
+        12.0,
+        12.0,
+        12.0,
+        12.0,
+        18.25,
+        12.0,
+        19.0
+      ],
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "taxid2_10",
+      "type": "fieldform",
+      "bind": "$.taxid2_10",
+      "position": {
+        "x": 426,
+        "y": 181.029
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "charSpacing": [
+        18.39,
+        12.02,
+        12.3,
+        10.61,
+        18.39,
+        12.02,
+        12.45,
+        12.02,
+        17.68,
+        18.39,
+        12.02,
+        19.09
+      ],
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "notaxlist",
+      "type": "text",
+      "bind": "$.notaxlist",
+      "position": {
+        "x": 105,
+        "y": 236.186
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "check1s",
+      "type": "text",
+      "bind": "$.check1s",
+      "position": {
+        "x": 212.5,
+        "y": 236.893
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "check1sp",
+      "type": "text",
+      "bind": "$.check1sp",
+      "position": {
+        "x": 290.5,
+        "y": 236.893
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "check2",
+      "type": "text",
+      "bind": "$.check2",
+      "position": {
+        "x": 398.5,
+        "y": 236.893
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "check3",
+      "type": "text",
+      "bind": "$.check3",
+      "position": {
+        "x": 475,
+        "y": 236.893
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "check2s",
+      "type": "text",
+      "bind": "$.check2s",
+      "position": {
+        "x": 212.5,
+        "y": 255.279
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "check3s",
+      "type": "text",
+      "bind": "$.check3s",
+      "position": {
+        "x": 290.5,
+        "y": 255.279
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "check53",
+      "type": "text",
+      "bind": "$.check53",
+      "position": {
+        "x": 398.5,
+        "y": 255.279
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "date1",
+      "type": "text",
+      "bind": "$.date1",
+      "position": {
+        "x": 368.919,
+        "y": 304.071
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "amount1",
+      "type": "text",
+      "bind": "$.amount1",
+      "position": {
+        "x": 485.98,
+        "y": 304.071
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "tax1",
+      "type": "text",
+      "bind": "$.tax1",
+      "position": {
+        "x": 557.635,
+        "y": 304.071
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "date2",
+      "type": "text",
+      "bind": "$.date2",
+      "position": {
+        "x": 368.919,
+        "y": 318.921
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "amount2",
+      "type": "text",
+      "bind": "$.amount2",
+      "position": {
+        "x": 485.98,
+        "y": 318.921
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "tax2",
+      "type": "text",
+      "bind": "$.tax2",
+      "position": {
+        "x": 557.635,
+        "y": 318.921
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "date3",
+      "type": "text",
+      "bind": "$.date3",
+      "position": {
+        "x": 368.919,
+        "y": 333.771
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "amount3",
+      "type": "text",
+      "bind": "$.amount3",
+      "position": {
+        "x": 485.98,
+        "y": 333.771
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "tax3",
+      "type": "text",
+      "bind": "$.tax3",
+      "position": {
+        "x": 557.635,
+        "y": 333.771
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "date4",
+      "type": "text",
+      "bind": "$.date4",
+      "position": {
+        "x": 368.919,
+        "y": 348.621
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "amount4",
+      "type": "text",
+      "bind": "$.amount4",
+      "position": {
+        "x": 485.98,
+        "y": 348.621
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "tax4",
+      "type": "text",
+      "bind": "$.tax4",
+      "position": {
+        "x": 557.635,
+        "y": 348.621
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "date5",
+      "type": "text",
+      "bind": "$.date5",
+      "position": {
+        "x": 368.919,
+        "y": 406.607
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "amount5",
+      "type": "text",
+      "bind": "$.amount5",
+      "position": {
+        "x": 485.98,
+        "y": 406.607
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "tax5",
+      "type": "text",
+      "bind": "$.tax5",
+      "position": {
+        "x": 557.635,
+        "y": 406.607
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "date6",
+      "type": "text",
+      "bind": "$.date6",
+      "position": {
+        "x": 368.919,
+        "y": 421.457
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "amount6",
+      "type": "text",
+      "bind": "$.amount6",
+      "position": {
+        "x": 485.98,
+        "y": 421.457
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "tax6",
+      "type": "text",
+      "bind": "$.tax6",
+      "position": {
+        "x": 557.635,
+        "y": 421.457
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "date7",
+      "type": "text",
+      "bind": "$.date7",
+      "position": {
+        "x": 368.919,
+        "y": 436.307
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "amount7",
+      "type": "text",
+      "bind": "$.amount7",
+      "position": {
+        "x": 485.98,
+        "y": 436.307
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "tax7",
+      "type": "text",
+      "bind": "$.tax7",
+      "position": {
+        "x": 557.635,
+        "y": 436.307
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "type4_2_1_4",
+      "type": "text",
+      "bind": "$.type4_2_1_4",
+      "position": {
+        "x": 178.784,
+        "y": 450.45
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "date8",
+      "type": "text",
+      "bind": "$.date8",
+      "position": {
+        "x": 368.919,
+        "y": 450.45
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "amount8",
+      "type": "text",
+      "bind": "$.amount8",
+      "position": {
+        "x": 485.98,
+        "y": 450.45
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "tax8",
+      "type": "text",
+      "bind": "$.tax8",
+      "position": {
+        "x": 557.635,
+        "y": 450.45
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "date9",
+      "type": "text",
+      "bind": "$.date9",
+      "position": {
+        "x": 368.919,
+        "y": 478.736
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "amount9",
+      "type": "text",
+      "bind": "$.amount9",
+      "position": {
+        "x": 485.98,
+        "y": 478.736
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "tax9",
+      "type": "text",
+      "bind": "$.tax9",
+      "position": {
+        "x": 557.635,
+        "y": 478.736
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "date10",
+      "type": "text",
+      "bind": "$.date10",
+      "position": {
+        "x": 368.919,
+        "y": 507.021
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "amount10",
+      "type": "text",
+      "bind": "$.amount10",
+      "position": {
+        "x": 485.98,
+        "y": 507.021
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "tax10",
+      "type": "text",
+      "bind": "$.tax10",
+      "position": {
+        "x": 557.635,
+        "y": 507.021
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "date11",
+      "type": "text",
+      "bind": "$.date11",
+      "position": {
+        "x": 368.919,
+        "y": 536.014
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "amount11",
+      "type": "text",
+      "bind": "$.amount11",
+      "position": {
+        "x": 485.98,
+        "y": 536.014
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "tax11",
+      "type": "text",
+      "bind": "$.tax11",
+      "position": {
+        "x": 557.635,
+        "y": 536.014
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "type4_2_2_5",
+      "type": "text",
+      "bind": "$.type4_2_2_5",
+      "position": {
+        "x": 177.365,
+        "y": 566.421
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "date12",
+      "type": "text",
+      "bind": "$.date12",
+      "position": {
+        "x": 368.919,
+        "y": 565.714
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "amount12",
+      "type": "text",
+      "bind": "$.amount12",
+      "position": {
+        "x": 485.98,
+        "y": 565.714
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "tax12",
+      "type": "text",
+      "bind": "$.tax12",
+      "position": {
+        "x": 557.635,
+        "y": 565.714
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "date13",
+      "type": "text",
+      "bind": "$.date13",
+      "position": {
+        "x": 368.919,
+        "y": 623.7
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "amount13",
+      "type": "text",
+      "bind": "$.amount13",
+      "position": {
+        "x": 485.98,
+        "y": 623.7
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "tax13",
+      "type": "text",
+      "bind": "$.tax13",
+      "position": {
+        "x": 557.635,
+        "y": 623.7
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "type6",
+      "type": "text",
+      "bind": "$.type6",
+      "position": {
+        "x": 113.514,
+        "y": 639.964
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "date14",
+      "type": "text",
+      "bind": "$.date14",
+      "position": {
+        "x": 368.919,
+        "y": 639.964
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "center",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "amount14",
+      "type": "text",
+      "bind": "$.amount14",
+      "position": {
+        "x": 485.98,
+        "y": 639.964
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "tax14",
+      "type": "text",
+      "bind": "$.tax14",
+      "position": {
+        "x": 557.635,
+        "y": 639.964
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "amountsum",
+      "type": "text",
+      "bind": "$.amountsum",
+      "position": {
+        "x": 485.98,
+        "y": 660.471
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "taxsum",
+      "type": "text",
+      "bind": "$.taxsum",
+      "position": {
+        "x": 557.635,
+        "y": 660.471
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "taxsumtext",
+      "type": "text",
+      "bind": "$.taxsumtext",
+      "position": {
+        "x": 212.838,
+        "y": 678.857
+      },
+      "font": {
+        "family": "sarabun",
+        "style": "bold-italic",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "paid1",
+      "type": "text",
+      "bind": "$.paid1",
+      "position": {
+        "x": 276.689,
+        "y": 697.95
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "paid2",
+      "type": "text",
+      "bind": "$.paid2",
+      "position": {
+        "x": 404.392,
+        "y": 697.95
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "paid3",
+      "type": "text",
+      "bind": "$.paid3",
+      "position": {
+        "x": 539.189,
+        "y": 697.95
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "right",
+      "format": "#,###.##",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "check_type_pay1",
+      "type": "text",
+      "bind": "$.check_type_pay1",
+      "position": {
+        "x": 85.5,
+        "y": 719.871
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "check_type_pay2",
+      "type": "text",
+      "bind": "$.check_type_pay2",
+      "position": {
+        "x": 178.5,
+        "y": 719.871
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "check_type_pay3",
+      "type": "text",
+      "bind": "$.check_type_pay3",
+      "position": {
+        "x": 286.5,
+        "y": 719.871
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "check_type_pay4",
+      "type": "text",
+      "bind": "$.check_type_pay4",
+      "position": {
+        "x": 397,
+        "y": 719.871
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    },
+    {
+      "id": "type_pay4_detail",
+      "type": "text",
+      "bind": "$.type_pay4_detail",
+      "position": {
+        "x": 471.081,
+        "y": 719.871
+      },
+      "font": {
+        "family": "sarabun",
+        "size": 14
+      },
+      "align": "left",
+      "pages": [
+        1
+      ]
+    }
+  ]
+}

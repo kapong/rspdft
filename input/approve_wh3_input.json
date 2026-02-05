@@ -1,0 +1,98 @@
+{
+  "bookid": "[bookid]",
+  "docid": "[docid]",
+  "datecreate": "[datecreate]",
+
+  "name1": "[name1]",
+  "address1": "[address1]",
+  "taxid1": "1111111111111",
+  "taxid1_10": "1111111111",
+
+  "name2": "[name2]",
+  "address2": "[address2]",
+  "taxid2": "2222222222222",
+  "taxid2_10": "2222222222",
+
+  "notaxlist": "[notaxlist]",
+
+  "check1s": "X",
+  "check1sp": "X",
+  "check2": "X",
+  "check3": "X",
+  "check2s": "X",
+  "check3s": "X",
+  "check53": "X",
+
+  "date1": "[date1]",
+  "amount1": 1111.11,
+  "tax1": 111.11,
+
+  "date2": "[date2]",
+  "amount2": 2222.22,
+  "tax2": 222.22,
+
+  "date3": "[date3]",
+  "amount3": 3333.33,
+  "tax3": 333.33,
+
+  "date4": "[date4]",
+  "amount4": 4444.44,
+  "tax4": 444.44,
+
+  "date5": "[date5]",
+  "amount5": 5555.55,
+  "tax5": 555.55,
+
+  "date6": "[date6]",
+  "amount6": 6666.66,
+  "tax6": 666.66,
+
+  "date7": "[date7]",
+  "amount7": 7777.77,
+  "tax7": 777.77,
+
+  "type4_2_1_4": "[type4_2_1_4]",
+  "date8": "[date8]",
+  "amount8": 8888.88,
+  "tax8": 888.88,
+
+  "date9": "[date9]",
+  "amount9": 9999.99,
+  "tax9": 999.99,
+
+  "date10": "[date10]",
+  "amount10": 10000.00,
+  "tax10": 1000.00,
+
+  "date11": "[date11]",
+  "amount11": 11000.00,
+  "tax11": 1100.00,
+
+  "type4_2_2_5": "[type4_2_2_5]",
+  "date12": "[date12]",
+  "amount12": 12000.00,
+  "tax12": 1200.00,
+
+  "date13": "[date13]",
+  "amount13": 13000.00,
+  "tax13": 1300.00,
+
+  "type6": "[type6]",
+  "date14": "[date14]",
+  "amount14": 14000.00,
+  "tax14": 1400.00,
+
+  "amountsum": 99999.99,
+  "taxsum": 9999.99,
+  "taxsumtext": "[taxsumtext]",
+
+  "paid1": "[paid1]",
+  "paid2": "[paid2]",
+  "paid3": "[paid3]",
+
+  "check_type_pay1": "X",
+  "check_type_pay2": "X",
+  "check_type_pay3": "X",
+  "check_type_pay4": "X",
+  "type_pay4_detail": "[type_pay4_detail]"
+}

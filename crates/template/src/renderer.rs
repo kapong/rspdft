@@ -174,24 +174,57 @@ impl TemplateRenderer {
     /// Each call creates a fresh PdfDocument from stored pdf_bytes,
     /// adds fonts, renders template blocks, and returns the output bytes.
     /// No state is retained between calls.
+    ///
+    /// For more control over the output, use `render_to_document()` instead,
+    /// which returns a PdfDocument that can be further modified before
+    /// calling `to_bytes()` on it.
     pub fn render(&self, data: &serde_json::Value) -> Result<Vec<u8>> {
+        let mut doc = self.render_to_document(data)?;
+        doc.to_bytes()
+            .map_err(|e| TemplateError::RenderError(format!("Failed to save PDF: {e}")))
+    }
+
+    /// Render with data - returns a PdfDocument for further modification
+    ///
+    /// This allows you to make additional modifications to the document
+    /// (e.g., adding watermarks, labels only on specific pages) before
+    /// converting to bytes.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let mut doc = renderer.render_to_document(&data)?;
+    /// // Add a "COPY" label only on page 2
+    /// doc.draw_text("(COPY)", 2, 500.0, 50.0)?;
+    /// let bytes = doc.to_bytes()?;
+    /// ```
+    pub fn render_to_document(&self, data: &serde_json::Value) -> Result<PdfDocument> {
         // 1. Clone base PDF -> fresh document
         let mut doc = PdfDocument::open_from_bytes(&self.pdf_bytes)
             .map_err(|e| TemplateError::RenderError(format!("Failed to open PDF: {e}")))?;
 
-        // 2. Add fonts from stored bytes
+        // 2. Prepare pages for duplication if configured
+        if let Some(duplicate) = &self.template.template.duplicate {
+            if let Some(target_page) = duplicate.page {
+                // Ensure target page exists by duplicating page 1
+                while doc.page_count() < target_page as usize {
+                    doc.duplicate_page(1).map_err(|e| {
+                        TemplateError::RenderError(format!("Failed to duplicate page: {e}"))
+                    })?;
+                }
+            }
+        }
+
+        // 3. Add fonts from stored bytes
         for (name, font_data) in &self.fonts {
             doc.add_font(name, font_data).map_err(|e| {
                 TemplateError::RenderError(format!("Failed to add font {name}: {e}"))
             })?;
         }
 
-        // 3. Render all blocks
+        // 4. Render all blocks
         self.render_blocks(&mut doc, data)?;
 
-        // 4. Return bytes
-        doc.to_bytes()
-            .map_err(|e| TemplateError::RenderError(format!("Failed to save PDF: {e}")))
+        Ok(doc)
     }
 
     /// Internal: render all blocks to document
@@ -203,10 +236,23 @@ impl TemplateRenderer {
 
         // Handle block duplication if configured
         if let Some(duplicate) = &self.template.template.duplicate {
-            if duplicate.x != 0.0 || duplicate.y != 0.0 {
+            let has_offset = duplicate.x != 0.0 || duplicate.y != 0.0;
+            let has_page = duplicate.page.is_some();
+
+            if has_offset || has_page {
                 for block in &self.template.blocks {
                     let mut dup_block = block.clone();
-                    dup_block.shift_position(duplicate.x, duplicate.y);
+
+                    // Apply position offset if configured
+                    if has_offset {
+                        dup_block.shift_position(duplicate.x, duplicate.y);
+                    }
+
+                    // Change target page if configured
+                    if let Some(target_page) = duplicate.page {
+                        dup_block.set_pages(vec![target_page as usize]);
+                    }
+
                     self.render_block(doc, &dup_block, data)?;
                 }
             }

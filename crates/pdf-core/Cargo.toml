@@ -37,3 +37,7 @@ path = "../../examples/debug_fonts.rs"
 [[example]]
 name = "debug_embed"
 path = "../../examples/debug_embed.rs"
+
+[[example]]
+name = "approve_wh3"
+path = "../../examples/approve_wh3.rs"

@@ -315,7 +315,7 @@ impl PdfDocument {
     /// doc.set_font_weight(FontWeight::Bold)?;  // Now bold 12pt
     /// doc.set_font_size(16.0)?;  // Now bold 16pt
     /// ```
-    pub fn set_font(&mut self, family: &str, size: f32) -> Result<()> {
+    pub fn set_font(&mut self, family: &str, size: f32) -> Result<&mut Self> {
         if !self.font_families.contains_key(family) && !self.fonts.contains_key(family) {
             return Err(PdfError::FontNotFound(family.to_string()));
         }
@@ -323,46 +323,46 @@ impl PdfDocument {
         self.current_family = Some(family.to_string());
         self.current_font_size = size;
 
-        Ok(())
+        Ok(self)
     }
 
     /// Set only the font size (keeps current family/weight/style)
     ///
     /// # Arguments
     /// * `size` - Font size in points
-    pub fn set_font_size(&mut self, size: f32) -> Result<()> {
+    pub fn set_font_size(&mut self, size: f32) -> Result<&mut Self> {
         if self.current_family.is_none() {
             return Err(PdfError::FontNotFound("No font family set".to_string()));
         }
 
         self.current_font_size = size;
-        Ok(())
+        Ok(self)
     }
 
     /// Set the font weight (keeps current family/size/style)
     ///
     /// # Arguments
     /// * `weight` - Font weight (Regular or Bold)
-    pub fn set_font_weight(&mut self, weight: FontWeight) -> Result<()> {
+    pub fn set_font_weight(&mut self, weight: FontWeight) -> Result<&mut Self> {
         if self.current_family.is_none() {
             return Err(PdfError::FontNotFound("No font family set".to_string()));
         }
 
         self.current_weight = weight;
-        Ok(())
+        Ok(self)
     }
 
     /// Set the font style (keeps current family/size/weight)
     ///
     /// # Arguments
     /// * `style` - Font style (Normal or Italic)
-    pub fn set_font_style(&mut self, style: FontStyle) -> Result<()> {
+    pub fn set_font_style(&mut self, style: FontStyle) -> Result<&mut Self> {
         if self.current_family.is_none() {
             return Err(PdfError::FontNotFound("No font family set".to_string()));
         }
 
         self.current_style = style;
-        Ok(())
+        Ok(self)
     }
 
     /// Set the text color
@@ -376,8 +376,9 @@ impl PdfDocument {
     /// doc.set_text_color(Color::rgb(0.5, 0.5, 0.5))?; // Gray
     /// doc.set_text_color(Color::from_rgb(255, 128, 0))?; // Orange
     /// ```
-    pub fn set_text_color(&mut self, color: Color) {
+    pub fn set_text_color(&mut self, color: Color) -> &mut Self {
         self.current_text_color = color;
+        self
     }
 
     /// Set font fallback chain for a family
@@ -1027,20 +1028,40 @@ impl PdfDocument {
             .as_dict()
             .map_err(|_| PdfError::SaveError("Page object is not a dictionary".to_string()))?;
 
-        // Get or create Resources dictionary
-        let mut resources_dict = match page_dict.get(b"Resources") {
-            Ok(resources) => match resources.as_dict() {
-                Ok(dict) => dict.clone(),
-                Err(_) => Dictionary::new(),
+        // Get or create Resources dictionary, handling indirect references
+        let (mut resources_dict, resources_obj_id) = match page_dict.get(b"Resources") {
+            Ok(resources) => match resources {
+                Object::Dictionary(dict) => (dict.clone(), None),
+                Object::Reference(ref_id) => {
+                    // Dereference the Resources object
+                    match self.inner.get_object(*ref_id) {
+                        Ok(obj) => match obj.as_dict() {
+                            Ok(dict) => (dict.clone(), Some(*ref_id)),
+                            Err(_) => (Dictionary::new(), None),
+                        },
+                        Err(_) => (Dictionary::new(), None),
+                    }
+                }
+                _ => (Dictionary::new(), None),
             },
-            Err(_) => Dictionary::new(),
+            Err(_) => (Dictionary::new(), None),
         };
 
-        // Get or create Font dictionary in Resources
+        // Get or create Font dictionary in Resources, handling indirect references
         let font_dict = match resources_dict.get(b"Font") {
-            Ok(font) => match font.as_dict() {
-                Ok(dict) => dict.clone(),
-                Err(_) => Dictionary::new(),
+            Ok(font) => match font {
+                Object::Dictionary(dict) => dict.clone(),
+                Object::Reference(ref_id) => {
+                    // Dereference the Font object
+                    match self.inner.get_object(*ref_id) {
+                        Ok(obj) => match obj.as_dict() {
+                            Ok(dict) => dict.clone(),
+                            Err(_) => Dictionary::new(),
+                        },
+                        Err(_) => Dictionary::new(),
+                    }
+                }
+                _ => Dictionary::new(),
             },
             Err(_) => Dictionary::new(),
         };
@@ -1058,12 +1079,19 @@ impl PdfDocument {
         // Update Resources dictionary with the new Font dictionary
         resources_dict.set(b"Font", Object::Dictionary(new_font_dict));
 
-        // Update page dictionary
-        let mut new_page_dict = page_dict.clone();
-        new_page_dict.set(b"Resources", Object::Dictionary(resources_dict));
-
-        // Replace page object by creating a new one
-        self.inner.objects.insert(page_id, new_page_dict.into());
+        // If Resources was an indirect reference, update that object
+        // Otherwise, update the page dictionary inline
+        if let Some(res_id) = resources_obj_id {
+            // Update the referenced Resources object directly
+            self.inner
+                .objects
+                .insert(res_id, Object::Dictionary(resources_dict));
+        } else {
+            // Update page dictionary with inline Resources
+            let mut new_page_dict = page_dict.clone();
+            new_page_dict.set(b"Resources", Object::Dictionary(resources_dict));
+            self.inner.objects.insert(page_id, new_page_dict.into());
+        }
 
         Ok(())
     }
@@ -1203,83 +1231,63 @@ impl PdfDocument {
             .get(&(page as u32))
             .ok_or(PdfError::InvalidPage(page, pages.len()))?;
 
-        // First pass: extract page dict and gather info about content refs
-        // We need to clone data to avoid borrowing issues
-        let (existing_content, page_dict_clone) = {
-            let page_obj = self.inner.get_object(page_id)?;
-            let page_dict = page_obj
-                .as_dict()
-                .map_err(|_| PdfError::ParseError("Page object is not a dictionary".to_string()))?;
+        // Create a new stream for our content
+        let new_stream = Stream::new(Dictionary::new(), content.to_vec());
+        let new_stream_id = self.inner.add_object(new_stream);
 
-            // Clone the page dict for later modification
-            let page_dict_clone = page_dict.clone();
+        // Get page dict and update Contents to include the new stream
+        let page_obj = self.inner.get_object(page_id)?;
+        let page_dict = page_obj
+            .as_dict()
+            .map_err(|_| PdfError::ParseError("Page object is not a dictionary".to_string()))?;
 
-            // Get existing content stream
-            let existing_content = match page_dict.get(b"Contents") {
-                Ok(contents) => {
-                    match contents {
-                        Object::Stream(stream) => {
-                            // Single stream - decompress if needed
-                            stream
-                                .decompressed_content()
-                                .unwrap_or_else(|_| stream.content.clone())
-                        }
-                        Object::Reference(ref_id) => {
-                            // Contents is a reference to a stream object
-                            if let Ok(Object::Stream(stream)) = self.inner.get_object(*ref_id) {
-                                stream
-                                    .decompressed_content()
-                                    .unwrap_or_else(|_| stream.content.clone())
-                            } else {
-                                Vec::new()
+        let mut new_page_dict = page_dict.clone();
+
+        // Build a new Contents array that preserves original streams
+        let new_contents = match page_dict.get(b"Contents") {
+            Ok(contents) => {
+                match contents {
+                    Object::Reference(ref_id) => {
+                        // Check what the reference points to
+                        match self.inner.get_object(*ref_id) {
+                            Ok(Object::Array(arr)) => {
+                                // Reference to array - clone array and add new stream ref
+                                let mut new_arr = arr.clone();
+                                new_arr.push(Object::Reference(new_stream_id));
+                                Object::Array(new_arr)
                             }
-                        }
-                        Object::Array(arr) => {
-                            // Array of streams or references - concatenate them
-                            let mut combined = Vec::new();
-                            for obj in arr {
-                                match obj {
-                                    Object::Reference(ref_id) => {
-                                        if let Ok(Object::Stream(stream)) =
-                                            self.inner.get_object(*ref_id)
-                                        {
-                                            let data = stream
-                                                .decompressed_content()
-                                                .unwrap_or_else(|_| stream.content.clone());
-                                            combined.extend_from_slice(&data);
-                                        }
-                                    }
-                                    Object::Stream(stream) => {
-                                        let data = stream
-                                            .decompressed_content()
-                                            .unwrap_or_else(|_| stream.content.clone());
-                                        combined.extend_from_slice(&data);
-                                    }
-                                    _ => {}
-                                }
+                            Ok(Object::Stream(_)) => {
+                                // Reference to single stream - create array with both
+                                Object::Array(vec![
+                                    Object::Reference(*ref_id),
+                                    Object::Reference(new_stream_id),
+                                ])
                             }
-                            combined
+                            _ => Object::Reference(new_stream_id),
                         }
-                        _ => Vec::new(),
                     }
+                    Object::Array(arr) => {
+                        // Direct array - clone and add new stream ref
+                        let mut new_arr = arr.clone();
+                        new_arr.push(Object::Reference(new_stream_id));
+                        Object::Array(new_arr)
+                    }
+                    Object::Stream(_) => {
+                        // Direct stream (unusual) - wrap original in ref would be complex
+                        // For simplicity, create array with just the new stream
+                        // This case is rare in practice
+                        Object::Reference(new_stream_id)
+                    }
+                    _ => Object::Reference(new_stream_id),
                 }
-                Err(_) => Vec::new(),
-            };
-
-            (existing_content, page_dict_clone)
+            }
+            Err(_) => {
+                // No existing contents - just use our new stream
+                Object::Reference(new_stream_id)
+            }
         };
 
-        // Append new content
-        let mut new_content = existing_content;
-        new_content.extend_from_slice(content);
-
-        // Create new stream and add as indirect object
-        let new_stream = Stream::new(Dictionary::new(), new_content);
-        let stream_id = self.inner.add_object(new_stream);
-
-        // Update page dictionary with reference to stream
-        let mut new_page_dict = page_dict_clone;
-        new_page_dict.set(b"Contents", Object::Reference(stream_id));
+        new_page_dict.set(b"Contents", new_contents);
 
         // Replace page object
         self.inner.objects.insert(page_id, new_page_dict.into());
