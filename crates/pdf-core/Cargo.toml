@@ -27,8 +27,8 @@ name = "full_demo"
 path = "../../examples/full_demo.rs"
 
 [[example]]
-name = "boj45"
-path = "../../examples/boj45.rs"
+name = "render_form"
+path = "../../examples/render_form.rs"
 
 [[example]]
 name = "debug_fonts"
@@ -37,7 +37,3 @@ path = "../../examples/debug_fonts.rs"
 [[example]]
 name = "debug_embed"
 path = "../../examples/debug_embed.rs"
-
-[[example]]
-name = "approve_wh3"
-path = "../../examples/approve_wh3.rs"
